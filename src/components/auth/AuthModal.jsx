@@ -40,7 +40,14 @@ const AuthModal = () => {
         await registerUser({ ...data, role: 'buyer' });
       }
     } catch (err) {
-      setError(err.response?.data?.error?.message || "An error occurred");
+      console.error('Auth operation failed:', err);
+      if (err.response) {
+        setError(err.response.data?.error?.message || "Server error occurred");
+      } else if (err.request) {
+        setError("Cannot connect to server. Please ensure the backend is running.");
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
     }
   };
 

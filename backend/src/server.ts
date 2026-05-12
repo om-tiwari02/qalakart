@@ -12,7 +12,7 @@ async function main() {
   const httpServer = createServer(app);
   initSockets(httpServer);
 
-  httpServer.listen(env.PORT, "0.0.0.0", () => {
+  httpServer.listen(env.PORT, () => {
     logger.info("backend_listening", { port: env.PORT });
     console.log(`\n🚀 Backend Server is running! Click to open: http://localhost:${env.PORT}\n`);
   });

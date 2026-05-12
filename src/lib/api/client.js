@@ -22,9 +22,18 @@ client.interceptors.request.use((config) => {
 let isRefreshing = false;
 let refreshQueue = [];
 
+client.interceptors.request.use((config) => {
+  console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data);
+  return config;
+});
+
 client.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    console.log(`[API Response] ${res.status} ${res.config.url}`, res.data);
+    return res;
+  },
   async (error) => {
+    console.error(`[API Error] ${error.response?.status || 'Network'} ${error.config?.url}`, error);
     const original = error.config;
     if (
       error.response?.status === 401 &&
