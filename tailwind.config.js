@@ -7,16 +7,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        cosmic: '#000000',
-        surface: '#121212',
-        accent1: '#d4af37', // metallic gold
-        accent2: '#fcd34d', // light gold
-        gold: '#b48608',    // deep gold
+        cosmic: "#000000",
+        surface: "#121212",
+        accent1: "#d4af37",
+        accent2: "#fcd34d",
+        gold: "#b48608",
       },
       fontFamily: {
-        outfit: ['Outfit', 'sans-serif'],
-        inter: ['Inter', 'sans-serif'],
-      }
+        outfit: ["Outfit", "sans-serif"],
+        inter: ["Inter", "sans-serif"],
+      },
     },
   },
   plugins: [],

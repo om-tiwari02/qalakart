@@ -1,0 +1,30 @@
+{
+  "id": "e72f9152-4c22-482f-87a4-0c6756627040",
+  "name": "QalaKart API",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "tokenExpiry",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "resourceId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ]
+}

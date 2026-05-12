@@ -1,18 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Package, Zap, ArrowRight, X } from 'lucide-react';
+import { Package, ArrowRight, X } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useUIStore from '../../store/uiStore';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+const schema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters")
+});
 
 const AuthModal = () => {
   const { isAuthModalOpen, closeAuthModal } = useUIStore();
-  const { login, isAuthenticated } = useAuthStore();
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const { login, register: registerUser, isAuthenticated } = useAuthStore();
+  const [isLogin, setIsLogin] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  const { register: registerField, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(schema)
+  });
 
   useEffect(() => {
     if (isAuthenticated && isAuthModalOpen) {
@@ -21,13 +31,16 @@ const AuthModal = () => {
     }
   }, [isAuthenticated, isAuthModalOpen, closeAuthModal, navigate]);
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (!otpSent) {
-      setOtpSent(true);
-    } else {
-      // Default to buyer role for immediate access to /browse
-      login({ name, phone }, 'buyer');
+  const onSubmit = async (data) => {
+    setError(null);
+    try {
+      if (isLogin) {
+        await login(data);
+      } else {
+        await registerUser({ ...data, role: 'buyer' });
+      }
+    } catch (err) {
+      setError(err.response?.data?.error?.message || "An error occurred");
     }
   };
 
@@ -59,53 +72,50 @@ const AuthModal = () => {
               <Package className="w-8 h-8 text-accent1" />
             </div>
           </div>
-          <h2 className="text-3xl font-outfit font-bold text-white text-center mb-2">Welcome</h2>
-          <p className="text-slate-400 text-center mb-8 text-sm">Join the QalaKart community</p>
+          <h2 className="text-3xl font-outfit font-bold text-white text-center mb-2">{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+          <p className="text-slate-400 text-center mb-8 text-sm">
+            {isLogin ? "Log in to QalaKart" : "Join the QalaKart community"}
+          </p>
           
-          <form className="space-y-4" onSubmit={handleLogin}>
+          <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+            {error && <div className="text-red-400 text-sm mb-4 text-center">{error}</div>}
+            
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Full Name</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">Email</label>
               <input 
-                type="text" 
-                disabled={otpSent}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="John Doe" 
+                {...registerField('email')}
+                type="email" 
+                placeholder="you@example.com" 
                 className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-accent1 transition-colors" 
-                required
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Phone Number</label>
-              <input 
-                type="tel" 
-                disabled={otpSent}
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 98765 43210" 
-                className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-accent1 transition-colors" 
-                required
-              />
+              {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email.message}</p>}
             </div>
             
-            {otpSent && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-                <label className="block text-sm font-medium text-slate-400 mb-1 mt-4">One Time Password</label>
-                <input 
-                  type="text" 
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  placeholder="123456" 
-                  className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-accent1 transition-colors" 
-                  required
-                />
-              </motion.div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-1">Password</label>
+              <input 
+                {...registerField('password')}
+                type="password" 
+                placeholder="••••••••" 
+                className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-accent1 transition-colors" 
+              />
+              {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password.message}</p>}
+            </div>
             
-            <button type="submit" className="w-full btn-primary mt-6 flex justify-center items-center gap-2 py-4">
-              {otpSent ? 'Verify & Continue' : 'Send OTP'}
+            <button type="submit" disabled={isSubmitting} className="w-full btn-primary mt-6 flex justify-center items-center gap-2 py-4">
+              {isSubmitting ? 'Processing...' : (isLogin ? 'Log In' : 'Sign Up')}
               <ArrowRight className="w-4 h-4" />
             </button>
+            
+            <div className="text-center mt-4">
+              <button 
+                type="button"
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-accent1 text-sm hover:underline"
+              >
+                {isLogin ? "Don't have an account? Sign up" : "Already have an account? Log in"}
+              </button>
+            </div>
           </form>
         </motion.div>
       </motion.div>

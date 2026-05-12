@@ -37,6 +37,17 @@ const CreatorRoute = ({ children }) => {
 };
 
 function App() {
+  const bootstrap = useAuthStore((state) => state.bootstrap);
+  const isBootstrapping = useAuthStore((state) => state.isBootstrapping);
+
+  useEffect(() => {
+    bootstrap();
+  }, [bootstrap]);
+
+  if (isBootstrapping) {
+    return <div className="min-h-screen bg-bg flex items-center justify-center text-white">Loading...</div>;
+  }
+
   return (
     <BrowserRouter>
       <Routes>
