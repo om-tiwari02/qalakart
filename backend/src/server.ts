@@ -18,12 +18,22 @@ async function main() {
   });
 
   if (env.NODE_ENV === "production") {
-    await connectDb();
-    logger.info("db_connected");
+    try {
+      await connectDb();
+      logger.info("db_connected");
+    } catch (err) {
+      logger.error("db_connection_failed_production", { err });
+      process.exit(1);
+    }
   } else {
     connectDb()
       .then(() => logger.info("db_connected"))
-      .catch((err) => logger.error("db_connect_failed", { err }));
+      .catch((err) => {
+        logger.error("db_connect_failed", { 
+          message: err.message,
+          tip: "Ensure your IP is whitelisted in MongoDB Atlas. Current IP: 152.59.48.46"
+        });
+      });
   }
 }
 

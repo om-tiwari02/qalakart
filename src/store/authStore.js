@@ -16,7 +16,8 @@ const useAuthStore = create((set) => ({
       const { data: refresh } = await refreshClient.post('/auth/refresh');
       tokenStore.set(refresh.data.accessToken);
       set({ user: refresh.data.user, role: refresh.data.user.role, isAuthenticated: true, isBootstrapping: false });
-    } catch {
+    } catch (err) {
+      console.error('Bootstrap failed:', err.response?.status === 503 ? 'DB not connected' : err.message);
       set({ isBootstrapping: false });
     }
   },

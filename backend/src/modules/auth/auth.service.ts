@@ -10,7 +10,7 @@ function hashRefreshToken(token: string) {
   return bcrypt.hash(token, 10);
 }
 
-export async function register(input: { email: string; password: string; role: UserRole }) {
+export async function register(input: { email: string; password: string; role: UserRole; firstName?: string; lastName?: string }) {
   const exists = await User.findOne({ email: input.email }).lean().exec();
   if (exists) {
     const err = new Error("Email already in use") as Error & { statusCode?: number; code?: string };
@@ -23,7 +23,9 @@ export async function register(input: { email: string; password: string; role: U
   const user = await User.create({
     email: input.email,
     passwordHash,
-    role: input.role
+    role: input.role,
+    firstName: input.firstName,
+    lastName: input.lastName
   });
 
   const accessToken = signAccess({ sub: String(user._id), email: user.email, role: user.role });

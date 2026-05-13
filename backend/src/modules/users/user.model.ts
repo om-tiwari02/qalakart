@@ -14,6 +14,10 @@ const userSchema = new Schema(
   {
     email: { type: String, required: true, unique: true, index: true },
     passwordHash: { type: String, required: true },
+    firstName: { type: String, required: false },
+    lastName: { type: String, required: false },
+    profileImage: { type: String, required: false },
+    bio: { type: String, required: false },
     role: { type: String, required: true, enum: ["buyer", "creator", "admin"], default: "buyer" },
     refreshToken: { type: refreshTokenSchema, required: false, default: null }
   },

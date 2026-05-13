@@ -7,6 +7,9 @@ export interface IProduct extends Document {
   category: string;
   images: string[];
   userId: Types.ObjectId;
+  rating?: number;
+  delivery?: string;
+  creatorName?: string;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -20,6 +23,9 @@ const productSchema = new Schema<IProduct>(
     category: { type: String, required: true, index: true },
     images: [{ type: String }],
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    rating: { type: Number, default: 0 },
+    delivery: { type: String },
+    creatorName: { type: String },
     isDeleted: { type: Boolean, default: false, index: true }
   },
   { timestamps: true }

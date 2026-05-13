@@ -1,0 +1,475 @@
+{
+  "collection": {
+    "info": {
+      "name": "Qalakart API - Final Verified",
+      "description": "Complete API documentation for Qalakart backend, covering all modules with correct v1 pathing.",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+      {
+        "name": "System",
+        "description": "Core API health and status endpoints.",
+        "item": [
+          {
+            "name": "API Root",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/",
+                "host": ["{{baseUrl}}"],
+                "path": [""]
+              }
+            }
+          },
+          {
+            "name": "Health Check",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/health",
+                "host": ["{{baseUrl}}"],
+                "path": ["health"]
+              }
+            }
+          },
+          {
+            "name": "Ready Status",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/ready",
+                "host": ["{{baseUrl}}"],
+                "path": ["ready"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Auth",
+        "description": "Authentication and session management.",
+        "item": [
+          {
+            "name": "Register",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/auth/register",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "auth", "register"]
+              }
+            }
+          },
+          {
+            "name": "Login",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/auth/login",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "auth", "login"]
+              }
+            }
+          },
+          {
+            "name": "Refresh Token",
+            "request": {
+              "method": "POST",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/auth/refresh",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "auth", "refresh"]
+              }
+            }
+          },
+          {
+            "name": "Logout",
+            "request": {
+              "method": "POST",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/auth/logout",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "auth", "logout"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Products",
+        "description": "Product catalog and management.",
+        "item": [
+          {
+            "name": "List All Products",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/products",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "products"]
+              }
+            }
+          },
+          {
+            "name": "Get Product by ID",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/products/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "products", ":id"],
+                "variable": [
+                  { "key": "id", "value": "{{productId}}" }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Create Product",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"title\": \"New Product\",\n  \"description\": \"Product Description\",\n  \"price\": 99.99,\n  \"category\": \"Electronics\",\n  \"stock\": 10\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/products",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "products"]
+              }
+            }
+          },
+          {
+            "name": "Update Product",
+            "request": {
+              "method": "PATCH",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"price\": 109.99,\n  \"stock\": 15\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/products/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "products", ":id"],
+                "variable": [
+                  { "key": "id", "value": "{{productId}}" }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Delete Product",
+            "request": {
+              "method": "DELETE",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/products/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "products", ":id"],
+                "variable": [
+                  { "key": "id", "value": "{{productId}}" }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Cart",
+        "description": "User shopping cart operations.",
+        "item": [
+          {
+            "name": "Get Cart",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/cart",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "cart"]
+              }
+            }
+          },
+          {
+            "name": "Add to Cart",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/cart/add",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "cart", "add"]
+              }
+            }
+          },
+          {
+            "name": "Remove from Cart",
+            "request": {
+              "method": "DELETE",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/cart/remove/:productId",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "cart", "remove", ":productId"],
+                "variable": [
+                  { "key": "productId", "value": "{{productId}}" }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Clear Cart",
+            "request": {
+              "method": "DELETE",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/cart/clear",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "cart", "clear"]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Orders",
+        "description": "Order placement and tracking.",
+        "item": [
+          {
+            "name": "Place Order",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"shippingAddress\": \"123 Main St, City, Country\",\n  \"paymentMethod\": \"card\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/orders",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "orders"]
+              }
+            }
+          },
+          {
+            "name": "List My Orders",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/orders",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "orders"]
+              }
+            }
+          },
+          {
+            "name": "Get Order by ID",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/orders/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "orders", ":id"],
+                "variable": [
+                  { "key": "id", "value": "{{orderId}}" }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Update Order Status",
+            "request": {
+              "method": "PATCH",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"status\": \"shipped\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/orders/:id/status",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "orders", ":id", "status"],
+                "variable": [
+                  { "key": "id", "value": "{{orderId}}" }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Demands",
+        "description": "Market demand listing and creation.",
+        "item": [
+          {
+            "name": "List Demands",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/demands",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "demands"]
+              }
+            }
+          },
+          {
+            "name": "Get Demand by ID",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/demands/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "demands", ":id"],
+                "variable": [
+                  { "key": "id", "value": "{{demandId}}" }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Create Demand",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"title\": \"Looking for a rare item\",\n  \"description\": \"I need a vintage camera in good condition.\",\n  \"budget\": 500\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/demands",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "demands"]
+              }
+            }
+          },
+          {
+            "name": "Delete Demand",
+            "request": {
+              "method": "DELETE",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/demands/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "demands", ":id"],
+                "variable": [
+                  { "key": "id", "value": "{{demandId}}" }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "Moments",
+        "description": "Social sharing (Moments) and interactions.",
+        "item": [
+          {
+            "name": "List Moments",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/moments",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "moments"]
+              }
+            }
+          },
+          {
+            "name": "Create Moment",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"content\": \"Just bought a new phone from Qalakart!\",\n  \"images\": [\"https://example.com/image.jpg\"]\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/moments",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "moments"]
+              }
+            }
+          },
+          {
+            "name": "Like Moment",
+            "request": {
+              "method": "POST",
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/moments/:id/like",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "moments", ":id", "like"],
+                "variable": [
+                  { "key": "id", "value": "{{momentId}}" }
+                ]
+              }
+            }
+          },
+          {
+            "name": "Comment on Moment",
+            "request": {
+              "method": "POST",
+              "header": [
+                { "key": "Content-Type", "value": "application/json" }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"content\": \"Great choice!\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/api/v1/moments/:id/comment",
+                "host": ["{{baseUrl}}"],
+                "path": ["api", "v1", "moments", ":id", "comment"],
+                "variable": [
+                  { "key": "id", "value": "{{momentId}}" }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "auth": {
+      "type": "bearer",
+      "bearer": [
+        { "key": "token", "value": "{{accessToken}}", "type": "string" }
+      ]
+    },
+    "variable": [
+      { "key": "baseUrl", "value": "http://localhost:5001", "type": "string" },
+      { "key": "accessToken", "value": "your_token_here", "type": "string" },
+      { "key": "productId", "value": "product_id_here", "type": "string" },
+      { "key": "orderId", "value": "order_id_here", "type": "string" },
+      { "key": "demandId", "value": "demand_id_here", "type": "string" },
+      { "key": "momentId", "value": "moment_id_here", "type": "string" }
+    ]
+  }
+}

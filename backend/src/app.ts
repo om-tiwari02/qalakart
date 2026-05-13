@@ -6,15 +6,24 @@ import mongoSanitize from "express-mongo-sanitize";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import mongoose from "mongoose";
+import path from "path";
+import { fileURLToPath } from "url";
 
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { cartRouter } from "./modules/cart/cart.routes.js";
+import { demandRouter } from "./modules/demands/demand.routes.js";
+import { momentRouter } from "./modules/moments/moment.routes.js";
+import { orderRouter } from "./modules/orders/order.routes.js";
 import { productRouter } from "./modules/products/product.routes.js";
 import { logger } from "./services/logger.js";
 
 export function createApp() {
   const app = express();
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+  app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
   if (env.SENTRY_DSN) {
     Sentry.init({ dsn: env.SENTRY_DSN });
@@ -76,6 +85,10 @@ export function createApp() {
 
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1/products", productRouter);
+  app.use("/api/v1/cart", cartRouter);
+  app.use("/api/v1/orders", orderRouter);
+  app.use("/api/v1/demands", demandRouter);
+  app.use("/api/v1/moments", momentRouter);
 
   if (env.SENTRY_DSN) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -42,9 +42,13 @@ const AuthModal = () => {
     } catch (err) {
       console.error('Auth operation failed:', err);
       if (err.response) {
-        setError(err.response.data?.error?.message || "Server error occurred");
+        if (err.response.status === 503) {
+          setError("Database is not connected. Please ensure your IP is whitelisted in MongoDB Atlas.");
+        } else {
+          setError(err.response.data?.error?.message || "Server error occurred");
+        }
       } else if (err.request) {
-        setError("Cannot connect to server. Please ensure the backend is running.");
+        setError("Cannot connect to server. Please ensure the backend is running and your IP is whitelisted.");
       } else {
         setError("An unexpected error occurred. Please try again.");
       }

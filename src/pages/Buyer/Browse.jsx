@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, SlidersHorizontal, Star, ImagePlus, X, Upload, Zap, Heart, ShoppingCart, Camera, Gem, Leaf, Sparkles, MoreHorizontal, Store, Shirt, RotateCcw, Palette, Check, Package, BookOpen, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { mockProducts } from '../../data/mockData';
+
 import toast from 'react-hot-toast';
 import useKartStore from '../../store/kartStore';
 import useAuthStore from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
+import { productService } from '../../services/productService';
 
 const Browse = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -23,6 +24,33 @@ const Browse = () => {
   
   const { isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
+  const [products, setProducts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const data = await productService.list();
+        // Map backend _id to id for consistency with the rest of the app if needed,
+        // but we can also just update the UI to use _id
+        const mappedProducts = data.map(p => ({
+          ...p,
+          id: p._id,
+          name: p.title,
+          image: productService.getImageUrl(p.images[0]),
+          creator: p.creatorName
+        }));
+        setProducts(mappedProducts);
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+        toast.error('Failed to load products');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -60,7 +88,7 @@ const Browse = () => {
     setIsDemandModalOpen(false);
   };
 
-  const filteredProducts = mockProducts.filter(product => 
+  const filteredProducts = products.filter(product => 
     product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     product.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
     product.creator.toLowerCase().includes(searchQuery.toLowerCase())
