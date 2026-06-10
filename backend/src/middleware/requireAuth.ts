@@ -14,10 +14,14 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   try {
     req.user = verifyAccess(token);
     next();
-  } catch {
-    const err = new Error("Invalid token") as Error & { statusCode?: number; code?: string };
+  } catch (caught) {
+    const isExpired = caught instanceof Error && caught.name === "TokenExpiredError";
+    const err = new Error(isExpired ? "Token expired" : "Invalid token") as Error & {
+      statusCode?: number;
+      code?: string;
+    };
     err.statusCode = 401;
-    err.code = "TOKEN_INVALID";
+    err.code = isExpired ? "TOKEN_EXPIRED" : "TOKEN_INVALID";
     throw err;
   }
 }

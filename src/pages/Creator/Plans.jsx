@@ -1,67 +1,159 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Zap, Sparkles, Star, QrCode, ShieldCheck, X } from 'lucide-react';
+import { Check, Zap, Sparkles, Star, ShieldCheck, X } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { client } from '../../lib/api/client';
+
+const PLANS = [
+  {
+    id: 'p1',
+    name: 'Starter Creator',
+    price: '₹199',
+    amount: 199,
+    period: '/month',
+    offer: 'FREE for first 3 months',
+    icon: <Zap className="w-8 h-8 text-accent1" />,
+    features: ['Sell your products', 'Standard visibility', 'Basic Analytics'],
+    color: 'bg-white/5',
+    button: 'btn-outline'
+  },
+  {
+    id: 'p2',
+    name: 'Premium Creator',
+    price: '₹399',
+    amount: 399,
+    period: '/month',
+    offer: '₹199 for first 3 months',
+    icon: <Star className="w-8 h-8 text-accent2" />,
+    features: ['High Preference Listing', 'Monthly Advertisements', 'Priority Support', 'Advanced Sales Tools'],
+    color: 'bg-accent2/10 border-accent2/30',
+    button: 'btn-primary',
+    popular: true
+  },
+  {
+    id: 'p3',
+    name: 'Bulk Power (Upcoming)',
+    price: '₹1199',
+    amount: 1199,
+    period: ' for 50 days',
+    offer: 'Best for large inventories',
+    icon: <Sparkles className="w-8 h-8 text-purple-400" />,
+    features: ['Bulk Order Processing', 'Commission Free Selling', 'Featured in Spotlights', 'Custom Store URL'],
+    color: 'bg-white/5 opacity-80',
+    button: 'btn-outline',
+    upcoming: true
+  }
+];
+
+const DEMO_GST_NUMBER = '07AABCU9603R1ZV';
+
+const loadRazorpayCheckout = () =>
+  new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error('Unable to load Razorpay checkout'));
+    document.body.appendChild(script);
+  });
 
 const Plans = () => {
-  const { setSubscribed, isSubscribed } = useAuthStore();
+  const { setSubscribed, isSubscribed, user } = useAuthStore();
   const navigate = useNavigate();
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [showQR, setShowQR] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [panNumber, setPanNumber] = useState('');
+  const [isPaying, setIsPaying] = useState(false);
 
-  // If already subscribed, redirect to dashboard
   React.useEffect(() => {
     if (isSubscribed) {
       navigate('/creator/dashboard', { replace: true });
     }
   }, [isSubscribed, navigate]);
 
-  const handleSubscribe = () => {
+  const validatePAN = (value) => {
+    const normalized = value.trim().toUpperCase();
+    return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(normalized);
+  };
+
+  const handleOpenPlan = (plan) => {
+    setSelectedPlan(plan);
+    setPanNumber('');
+    setShowCheckout(true);
+  };
+
+  const handlePaymentSuccess = async () => {
     setSubscribed();
-    setShowQR(false);
-    toast.success(`Payment successful! Creator Dashboard Unlocked.`);
+    setShowCheckout(false);
+    toast.success('Payment successful! Creator Dashboard unlocked.');
     navigate('/creator/dashboard', { replace: true });
   };
 
-  const plans = [
-    {
-      id: 'p1',
-      name: 'Starter Creator',
-      price: '₹199',
-      period: '/month',
-      offer: 'FREE for first 3 months',
-      icon: <Zap className="w-8 h-8 text-accent1" />,
-      features: ['Sell your products', 'Standard visibility', 'Basic Analytics'],
-      color: 'bg-white/5',
-      button: 'btn-outline'
-    },
-    {
-      id: 'p2',
-      name: 'Premium Creator',
-      price: '₹399',
-      period: '/month',
-      offer: '₹199 for first 3 months',
-      icon: <Star className="w-8 h-8 text-accent2" />,
-      features: ['High Preference Listing', 'Monthly Advertisements', 'Priority Support', 'Advanced Sales Tools'],
-      color: 'bg-accent2/10 border-accent2/30',
-      button: 'btn-primary',
-      popular: true
-    },
-    {
-      id: 'p3',
-      name: 'Bulk Power (Upcoming)',
-      price: '₹1199',
-      period: ' for 50 days',
-      offer: 'Best for large inventories',
-      icon: <Sparkles className="w-8 h-8 text-purple-400" />,
-      features: ['Bulk Order Processing', 'Commission Free Selling', 'Featured in Spotlights', 'Custom Store URL'],
-      color: 'bg-white/5 opacity-80',
-      button: 'btn-outline',
-      upcoming: true
+  const handleCheckout = async () => {
+    if (!selectedPlan) return;
+    if (!validatePAN(panNumber)) {
+      toast.error('Please enter a valid PAN number.');
+      return;
     }
-  ];
+
+    setIsPaying(true);
+    try {
+      await loadRazorpayCheckout();
+
+      const [{ data: configResponse }, { data: orderResponse }] = await Promise.all([
+        client.get('/payments/config'),
+        client.post('/payments/razorpay/orders', {
+          amount: selectedPlan.amount,
+          currency: 'INR',
+          notes: {
+            source: 'creator-subscription',
+            planName: selectedPlan.name,
+            panNumber: panNumber.trim().toUpperCase(),
+            gstNumber: DEMO_GST_NUMBER
+          }
+        })
+      ]);
+
+      const razorpay = new window.Razorpay({
+        key: configResponse.data.keyId,
+        amount: orderResponse.data.amount,
+        currency: orderResponse.data.currency,
+        name: 'QalaKart Creator Plan',
+        description: `${selectedPlan.name} Subscription`,
+        order_id: orderResponse.data.id,
+        prefill: {
+          name: user?.name || '',
+          email: user?.email || '',
+          contact: user?.phone || ''
+        },
+        theme: { color: '#fcd34d' },
+        handler: async (response) => {
+          try {
+            await client.post('/payments/razorpay/verify', response);
+            await handlePaymentSuccess();
+          } catch (err) {
+            toast.error(err.response?.data?.error?.message || 'Payment verification failed');
+          } finally {
+            setIsPaying(false);
+          }
+        },
+        modal: {
+          ondismiss: () => setIsPaying(false)
+        }
+      });
+
+      razorpay.open();
+    } catch (err) {
+      setIsPaying(false);
+      toast.error(err.response?.data?.error?.message || err.message || 'Unable to start Razorpay payment');
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto py-12 px-6">
@@ -71,9 +163,9 @@ const Plans = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {plans.map((plan, idx) => (
+        {PLANS.map((plan, idx) => (
           <motion.div
-            key={plan.name}
+            key={plan.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
@@ -84,7 +176,7 @@ const Plans = () => {
                 Most Popular
               </div>
             )}
-            
+
             {plan.upcoming && (
               <div className="absolute top-4 right-4 px-3 py-1 bg-purple-500/20 text-purple-400 text-[10px] font-bold rounded-full uppercase tracking-widest border border-purple-500/30">
                 Coming Soon
@@ -94,7 +186,7 @@ const Plans = () => {
             <div className="mb-6">{plan.icon}</div>
             <h3 className="text-2xl font-bold text-white mb-1">{plan.name}</h3>
             <div className="text-accent1 text-sm font-bold mb-4 uppercase tracking-tighter">{plan.offer}</div>
-            
+
             <div className="flex items-baseline gap-1 mb-8">
               <span className="text-4xl font-black text-white">{plan.price}</span>
               <span className="text-slate-500 text-sm">{plan.period}</span>
@@ -111,13 +203,12 @@ const Plans = () => {
               ))}
             </div>
 
-            <button 
+            <button
               onClick={() => {
                 if (plan.upcoming) {
                   toast('Coming soon! We will notify you.', { icon: '⏳' });
                 } else {
-                  setSelectedPlan(plan);
-                  setShowQR(true);
+                  handleOpenPlan(plan);
                 }
               }}
               className={`${plan.button} w-full flex items-center justify-center gap-2`}
@@ -128,48 +219,47 @@ const Plans = () => {
         ))}
       </div>
 
-      {/* QR Modal */}
       <AnimatePresence>
-        {showQR && (
+        {showCheckout && selectedPlan && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="glass-card max-w-sm w-full p-8 rounded-3xl relative text-center"
+              className="glass-card max-w-lg w-full p-8 rounded-3xl relative text-center"
             >
-              <button onClick={() => setShowQR(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white">
+              <button onClick={() => setShowCheckout(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white">
                 <X />
               </button>
 
               <div className="mb-6">
                 <div className="w-16 h-16 rounded-2xl bg-accent2/10 flex items-center justify-center text-accent2 mx-auto mb-4">
-                  <QrCode className="w-10 h-10" />
+                  <ShieldCheck className="w-10 h-10" />
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2">Scan to Pay</h3>
-                <p className="text-slate-400 text-sm">Scan this QR with any UPI app to activate your <span className="text-accent2 font-bold">{selectedPlan?.name}</span></p>
+                <h3 className="text-2xl font-bold text-white mb-2">Activate {selectedPlan.name}</h3>
+                <p className="text-slate-400 text-sm">Enter your PAN details to continue with Razorpay checkout.</p>
               </div>
 
-              {/* Simulated QR Code */}
-              <div className="bg-white p-4 rounded-2xl mb-8 mx-auto w-48 h-48 flex items-center justify-center border-4 border-accent2">
-                <div className="grid grid-cols-4 gap-1 opacity-80">
-                   {[...Array(16)].map((_, i) => (
-                     <div key={i} className={`w-8 h-8 ${Math.random() > 0.5 ? 'bg-black' : 'bg-gray-200'}`} />
-                   ))}
-                </div>
+              <div className="space-y-4 mb-8 text-left">
+                <label className="block text-sm font-semibold text-slate-300">PAN Number</label>
+                <input
+                  type="text"
+                  value={panNumber}
+                  maxLength={10}
+                  onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
+                  placeholder="ABCDE1234F"
+                  className="w-full bg-surface/60 border border-white/10 rounded-2xl p-4 text-white placeholder:text-slate-500 focus:outline-none focus:border-accent1 transition-colors"
+                />
+                <p className="text-xs text-slate-500">PAN is required for creator subscription activation.</p>
               </div>
 
-              <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-accent1/10 border border-accent1/20 flex items-center gap-3 text-left">
-                  <ShieldCheck className="w-5 h-5 text-accent1 shrink-0" />
-                  <p className="text-xs text-slate-300">Secure UPI payment. Your subscription will be activated instantly upon confirmation.</p>
-                </div>
-                
-                <button onClick={handleSubscribe} className="w-full btn-primary py-4 text-lg font-bold">
-                  Confirm Payment
-                </button>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Verification: One-time per login</p>
-              </div>
+              <button
+                disabled={isPaying}
+                onClick={handleCheckout}
+                className="w-full btn-primary py-4 text-lg font-bold disabled:opacity-60"
+              >
+                {isPaying ? 'Opening Razorpay...' : `Pay ₹${selectedPlan.amount}`}
+              </button>
             </motion.div>
           </div>
         )}

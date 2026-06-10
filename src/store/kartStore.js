@@ -72,41 +72,7 @@ const useKartStore = create(
           expectedBy: '25 Apr 2026',
           creator: 'CraftyHands Bhopal',
         },
-        {
-          id: 'ORD-1987',
-          items: [
-            {
-              name: 'Origami Flower Bouquet',
-              image: 'https://images.unsplash.com/photo-1563241598-a262cb401b97',
-              qty: 2,
-              price: 1100,
-            },
-          ],
-          total: 1100,
-          status: 'upcoming',
-          orderStep: 0,
-          placedAt: '22 Apr 2026',
-          expectedBy: '24 Apr 2026',
-          creator: 'Paper Petals',
-        },
         // Mock previous orders
-        {
-          id: 'ORD-1654',
-          items: [
-            {
-              name: 'Personalized Wooden Keychain',
-              image: 'https://images.unsplash.com/photo-1611077543886-31db6218177d',
-              qty: 1,
-              price: 250,
-            },
-          ],
-          total: 250,
-          status: 'previous',
-          deliveredAt: '15 Apr 2026',
-          creator: 'WoodWorks MP',
-          rating: null,
-          review: null,
-        },
         {
           id: 'ORD-1432',
           items: [

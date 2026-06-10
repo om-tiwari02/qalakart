@@ -25,6 +25,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import useKartStore from '../../store/kartStore';
 import useAuthStore from '../../store/authStore';
+import { client } from '../../lib/api/client';
 import toast from 'react-hot-toast';
 
 // ─────────────────────────── ORDER TRACKER ──────────────────────────────────
@@ -184,11 +185,26 @@ const ReviewModal = ({ order, onClose, onSubmit }) => {
   );
 };
 
+const loadRazorpayCheckout = () =>
+  new Promise((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error('Unable to load Razorpay checkout'));
+    document.body.appendChild(script);
+  });
+
 // ─────────────────────────── CHECKOUT MODAL ─────────────────────────────────
 const CheckoutModal = ({ cart, total, onClose, onComplete }) => {
-  const { user, addCoins, deductCoins } = useAuthStore();
+  const { user, isAuthenticated, addCoins, deductCoins } = useAuthStore();
   const [paymentMethod, setPaymentMethod] = useState('online');
   const [useQalaCoins, setUseQalaCoins] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
 
   // Business Logic
   const hasExpensiveItem = cart.some(i => i.price >= 439);
@@ -198,10 +214,76 @@ const CheckoutModal = ({ cart, total, onClose, onComplete }) => {
   const finalTotal = total - discount;
   const coinsReward = total * 0.10;
 
-  const handleConfirm = () => {
+  const completeCheckout = () => {
     if (useQalaCoins) deductCoins(100);
     addCoins(coinsReward);
     onComplete(Math.round(coinsReward));
+  };
+
+  const handleConfirm = async () => {
+    if (paymentMethod === 'cod') {
+      completeCheckout();
+      return;
+    }
+
+    if (!isAuthenticated) {
+      toast.error('Please login before online payment');
+      return;
+    }
+
+    setIsPaying(true);
+    try {
+      await loadRazorpayCheckout();
+
+      const [{ data: configResponse }, { data: orderResponse }] = await Promise.all([
+        client.get('/payments/config'),
+        client.post('/payments/razorpay/orders', {
+          amount: Math.round(finalTotal),
+          currency: 'INR',
+          notes: {
+            source: 'qalakart-web',
+            itemCount: String(cart.length)
+          }
+        })
+      ]);
+
+      const razorpayOrder = orderResponse.data;
+      const razorpay = new window.Razorpay({
+        key: configResponse.data.keyId,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        name: 'QalaKart',
+        description: 'QalaKart order payment',
+        order_id: razorpayOrder.id,
+        prefill: {
+          name: user?.name || '',
+          email: user?.email || '',
+          contact: user?.phone || ''
+        },
+        theme: {
+          color: '#fcd34d'
+        },
+        handler: async (response) => {
+          try {
+            await client.post('/payments/razorpay/verify', response);
+            toast.success('Payment verified');
+            completeCheckout();
+          } catch (err) {
+            toast.error(err.response?.data?.error?.message || 'Payment verification failed');
+          } finally {
+            setIsPaying(false);
+          }
+        },
+        modal: {
+          ondismiss: () => setIsPaying(false)
+        }
+      });
+
+      razorpay.open();
+    } catch (err) {
+      setIsPaying(false);
+      toast.error(err.response?.data?.error?.message || err.message || 'Unable to start Razorpay payment');
+    }
   };
 
   return (
@@ -305,10 +387,11 @@ const CheckoutModal = ({ cart, total, onClose, onComplete }) => {
 
         <button 
           onClick={handleConfirm}
-          className="w-full btn-primary py-4 text-lg flex items-center justify-center gap-3"
+          disabled={isPaying}
+          className="w-full btn-primary py-4 text-lg flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-wait"
         >
-          <Coins className="w-5 h-5 text-black" />
-          Confirm & Pay
+          {paymentMethod === 'online' ? <CreditCard className="w-5 h-5 text-black" /> : <Coins className="w-5 h-5 text-black" />}
+          {isPaying ? 'Opening Razorpay...' : paymentMethod === 'online' ? 'Pay with Razorpay' : 'Confirm COD'}
         </button>
         <p className="text-[10px] text-accent1 text-center mt-3 font-bold uppercase tracking-widest animate-pulse">
           +{Math.round(coinsReward)} QalaCoins will be awarded!
@@ -320,10 +403,11 @@ const CheckoutModal = ({ cart, total, onClose, onComplete }) => {
 
 // ─────────────────────────── MY ORDERS TAB ──────────────────────────────────
 const MyOrders = () => {
-  const { orders, submitReview } = useKartStore();
+  const { orders: allOrders, submitReview } = useKartStore();
   const [reviewOrder, setReviewOrder] = useState(null);
   const [orderTab, setOrderTab] = useState('upcoming');
 
+  const orders = allOrders.filter((o) => o.id !== 'ORD-1987' && o.id !== 'ORD-1654');
   const upcoming = orders.filter((o) => o.status === 'upcoming');
   const previous = orders.filter((o) => o.status === 'previous');
   const shown = orderTab === 'upcoming' ? upcoming : previous;

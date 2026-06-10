@@ -43,7 +43,7 @@ const AuthModal = () => {
       console.error('Auth operation failed:', err);
       if (err.response) {
         if (err.response.status === 503) {
-          setError("Database is not connected. Please ensure your IP is whitelisted in MongoDB Atlas.");
+          setError(err.response.data?.error?.message || "Database is still connecting. Please try again in a few seconds.");
         } else {
           setError(err.response.data?.error?.message || "Server error occurred");
         }

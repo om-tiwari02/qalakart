@@ -104,7 +104,7 @@ const AIAssistant = () => {
                 >
                   <div className={`max-w-[85%] p-4 rounded-2xl text-sm ${
                     msg.role === 'user' 
-                    ? 'bg-accent1 text-black font-medium rounded-tr-none' 
+                    ? 'bg-accent1 text-slate-950 font-semibold rounded-tr-none shadow-[0_8px_24px_rgba(34,211,238,0.18)]' 
                     : 'bg-white/5 border border-white/10 text-slate-200 rounded-tl-none'
                   }`}>
                     {msg.image && (

@@ -4,6 +4,17 @@ import { env } from "../../config/env.js";
 import { verifyRefresh } from "../../utils/jwt.js";
 import { cookies, login, logout, refreshSession, register } from "./auth.service.js";
 
+function serializeUser(user: { _id: unknown; email: string; role: string; firstName?: string; lastName?: string; profileImage?: string }) {
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ");
+  return {
+    id: String(user._id),
+    email: user.email,
+    role: user.role,
+    name: name || user.email.split("@")[0],
+    profileImage: user.profileImage || ""
+  };
+}
+
 function setRefreshCookie(res: Response, token: string) {
   res.cookie(cookies.REFRESH_COOKIE_NAME, token, {
     httpOnly: true,
@@ -21,7 +32,7 @@ export async function registerController(req: Request, res: Response) {
     success: true,
     data: {
       accessToken,
-      user: { id: String(user._id), email: user.email, role: user.role }
+      user: serializeUser(user)
     }
   });
 }
@@ -33,7 +44,7 @@ export async function loginController(req: Request, res: Response) {
     success: true,
     data: {
       accessToken,
-      user: { id: String(user._id), email: user.email, role: user.role }
+      user: serializeUser(user)
     }
   });
 }
@@ -58,7 +69,7 @@ export async function refreshController(req: Request, res: Response) {
     success: true,
     data: {
       accessToken,
-      user: { id: String(user._id), email: user.email, role: user.role }
+      user: serializeUser(user)
     }
   });
 }

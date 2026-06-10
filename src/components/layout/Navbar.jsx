@@ -5,7 +5,14 @@ import { ShoppingCart, Heart, Menu, X, User } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useKartStore from '../../store/kartStore';
 import useUIStore from '../../store/uiStore';
+import { env } from '../../lib/env';
 
+const getProfileImageUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http') || path.startsWith('data:')) return path;
+  if (path.startsWith('/uploads/')) return `${env.VITE_API_BASE_URL}${path}`;
+  return path;
+};
 const Navbar = () => {
   const { user, role, logout } = useAuthStore();
   const { cart, wishlist } = useKartStore();
@@ -14,6 +21,7 @@ const Navbar = () => {
   const location = useLocation();
   const cartCount = cart.reduce((acc, item) => acc + (item.qty || 0), 0);
   const totalKartCount = cartCount + wishlist.length;
+  const profileImageUrl = getProfileImageUrl(user?.profileImage);
 
   const handleProfileClick = () => {
     const profilePath = role === 'creator' ? '/creator/dashboard' : '/profile';
@@ -65,8 +73,12 @@ const Navbar = () => {
               onClick={handleProfileClick}
               className="flex items-center gap-2 text-slate-300 hover:text-accent1 transition-colors cursor-pointer select-none"
             >
-              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border border-white/10">
-                <User className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 bg-white/10 flex items-center justify-center">
+                {profileImageUrl ? (
+                  <img src={profileImageUrl} alt={`${user.name} profile`} className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-4 h-4" />
+                )}
               </div>
               <span className="hidden lg:block font-medium">{user.name}</span>
             </div>

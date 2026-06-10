@@ -18,7 +18,12 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().min(1),
 
   ENCRYPTION_KEY: z.union([z.string().length(64), z.literal(""), z.undefined()]),
-  SENTRY_DSN: z.string().optional()
+  SENTRY_DSN: z.string().optional(),
+
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+
+  GROQ_API_KEY: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);

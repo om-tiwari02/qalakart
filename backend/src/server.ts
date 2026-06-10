@@ -1,4 +1,4 @@
-import { connectDb } from "./config/db.js";
+import { connectDb, startDbConnectionLoop } from "./config/db.js";
 import { env } from "./config/env.js";
 import { createApp } from "./app.js";
 import { logger } from "./services/logger.js";
@@ -26,14 +26,7 @@ async function main() {
       process.exit(1);
     }
   } else {
-    connectDb()
-      .then(() => logger.info("db_connected"))
-      .catch((err) => {
-        logger.error("db_connect_failed", { 
-          message: err.message,
-          tip: "Ensure your IP is whitelisted in MongoDB Atlas. Current IP: 152.59.48.46"
-        });
-      });
+    startDbConnectionLoop();
   }
 }
 

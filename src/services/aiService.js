@@ -1,4 +1,5 @@
 import { mockProducts } from "../data/mockData";
+import { client } from "../lib/api/client";
 
 const API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -17,6 +18,16 @@ Guidelines:
 5. If you identify a product the user wants, mention its price and creator clearly.`;
 
 export const getAIResponse = async (userMessage, imageBase64 = null) => {
+  try {
+    const { data } = await client.post("/ai/chat", {
+      message: userMessage,
+      imageBase64
+    });
+    return data.data.content;
+  } catch (apiError) {
+    console.error("AI backend error:", apiError);
+  }
+
   try {
     let messages = [
       { role: "system", content: SYSTEM_PROMPT }

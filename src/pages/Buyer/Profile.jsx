@@ -1,13 +1,23 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Mail, Phone, MapPin, Calendar, Coins, History, Save, Edit2 } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Calendar, Coins, History, Save, Edit2, Camera } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { env } from '../../lib/env';
+
+const getProfileImageUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http') || path.startsWith('data:')) return path;
+  if (path.startsWith('/uploads/')) return `${env.VITE_API_BASE_URL}${path}`;
+  return path;
+};
 
 const Profile = () => {
-  const { user, updateUser } = useAuthStore();
+  const { user, updateUser, uploadProfileImage } = useAuthStore();
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     age: user?.age || '',
@@ -21,7 +31,39 @@ const Profile = () => {
     setIsEditing(false);
   };
 
+  const handleProfileImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+
+    if (file.size > 2_000_000) {
+      toast.error('Image must be smaller than 2MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      setIsUploadingImage(true);
+      try {
+        await uploadProfileImage(reader.result);
+        toast.success('Profile image saved');
+      } catch (error) {
+        toast.error(error.response?.data?.error?.message || 'Could not save profile image');
+      } finally {
+        setIsUploadingImage(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
   if (!user) return null;
+
+  const profileImageUrl = getProfileImageUrl(user.profileImage);
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
@@ -33,9 +75,30 @@ const Profile = () => {
         {/* Header/Banner */}
         <div className="h-32 bg-gradient-to-r from-accent1/20 to-accent2/20 relative">
           <div className="absolute -bottom-12 left-8">
-            <div className="w-24 h-24 rounded-2xl bg-surface border-4 border-white/5 flex items-center justify-center shadow-2xl">
-              <User className="w-12 h-12 text-accent1" />
-            </div>
+            <label className="relative block w-24 h-24 rounded-2xl bg-surface border-4 border-white/5 shadow-2xl overflow-hidden group cursor-pointer">
+              {profileImageUrl ? (
+                <img src={profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <User className="w-12 h-12 text-accent1" />
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                className="hidden"
+                onChange={handleProfileImageChange}
+                disabled={isUploadingImage}
+              />
+              <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Camera className="w-6 h-6 text-white" />
+              </div>
+              {isUploadingImage && (
+                <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider text-white">
+                  Saving
+                </div>
+              )}
+            </label>
           </div>
           <div className="absolute top-4 right-8">
             <button 

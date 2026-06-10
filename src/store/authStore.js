@@ -46,6 +46,11 @@ const useAuthStore = create((set) => ({
 
   setSubscribed: () => set({ isSubscribed: true }),
   updateUser: (newData) => set((state) => ({ user: { ...state.user, ...newData } })),
+  uploadProfileImage: async (imageBase64) => {
+    const { data } = await client.patch('/users/me/profile-image', { imageBase64 });
+    set((state) => ({ user: { ...state.user, profileImage: data.data.profileImage } }));
+    return data.data.profileImage;
+  },
   addCoins: (amount) => set((state) => ({ user: { ...state.user, qalaCoins: Math.round((state.user?.qalaCoins || 0) + amount) } })),
   deductCoins: (amount) => set((state) => ({ user: { ...state.user, qalaCoins: Math.max(0, (state.user?.qalaCoins || 0) - amount) } })),
   useCoupon: () => set((state) => ({ user: { ...state.user, qalaCoins: (state.user?.qalaCoins || 0) - 500 }, hasUsedCoupon: true }))
