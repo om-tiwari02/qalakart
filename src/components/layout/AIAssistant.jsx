@@ -205,14 +205,16 @@ const AIAssistant = () => {
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
         className={`w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${
-          isOpen ? 'bg-surface border border-white/10 rotate-90' : 'bg-gradient-to-br from-accent1 to-accent2'
+          isOpen
+            ? 'bg-surface border border-white/10 rotate-90 shadow-[0_0_24px_rgba(245,158,11,0.35)]'
+            : 'bg-gradient-to-br from-amber-400 via-amber-300 to-yellow-400'
         }`}
       >
         {isOpen ? (
           <X className="w-8 h-8 text-white" />
         ) : (
           <div className="relative">
-            <Bot className="w-8 h-8 text-black" />
+            <Bot className="w-8 h-8 text-amber-950" />
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>

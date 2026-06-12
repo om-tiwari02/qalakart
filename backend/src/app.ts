@@ -81,6 +81,7 @@ export function createApp() {
     if (
       env.NODE_ENV !== "production" &&
       (_req.path.startsWith("/v1/auth") ||
+        _req.path.startsWith("/v1/products") ||
         _req.path.startsWith("/v1/payments") ||
         _req.path.startsWith("/v1/ai") ||
         _req.path.startsWith("/v1/users"))

@@ -1,6 +1,26 @@
+import mongoose from "mongoose";
 import { Product } from "./product.model.js";
 
+const memoryProducts: any[] = [];
+
+function isDbConnected() {
+  return mongoose.connection.readyState === 1;
+}
+
 export async function createProduct(userId: string, data: any) {
+  if (!isDbConnected()) {
+    const product = {
+      _id: new mongoose.Types.ObjectId().toString(),
+      ...data,
+      userId,
+      isDeleted: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    memoryProducts.push(product);
+    return product;
+  }
+
   const product = new Product({ ...data, userId });
   await product.save();
   return product;
@@ -8,6 +28,31 @@ export async function createProduct(userId: string, data: any) {
 
 export async function getProducts(query: any) {
   const { page, limit, search, category } = query;
+
+  if (!isDbConnected()) {
+    const normalizedSearch = search?.toLowerCase();
+    const filtered = memoryProducts.filter((product) => {
+      if (product.isDeleted) return false;
+      if (category && product.category !== category) return false;
+      if (!normalizedSearch) return true;
+
+      return `${product.title} ${product.description}`.toLowerCase().includes(normalizedSearch);
+    });
+
+    const start = (page - 1) * limit;
+    const items = filtered.slice(start, start + limit);
+
+    return {
+      items,
+      pagination: {
+        total: filtered.length,
+        page,
+        limit,
+        totalPages: Math.ceil(filtered.length / limit)
+      }
+    };
+  }
+
   const skip = (page - 1) * limit;
 
   const filter: any = { isDeleted: false };
@@ -35,6 +80,17 @@ export async function getProducts(query: any) {
 }
 
 export async function getProductById(id: string) {
+  if (!isDbConnected()) {
+    const product = memoryProducts.find((item) => item._id === id && !item.isDeleted);
+    if (!product) {
+      const err = new Error("Resource not found") as any;
+      err.statusCode = 404;
+      err.code = "NOT_FOUND";
+      throw err;
+    }
+    return product;
+  }
+
   const product = await Product.findOne({ _id: id, isDeleted: false });
   if (!product) {
     const err = new Error("Resource not found") as any;

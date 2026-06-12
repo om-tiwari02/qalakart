@@ -1,15 +1,116 @@
 import bcrypt from "bcryptjs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import mongoose from "mongoose";
 
-import { User, type UserRole } from "../users/user.model.js";
 import { env } from "../../config/env.js";
+import { User, type UserRole } from "../users/user.model.js";
 import { signAccess, signRefresh } from "../../utils/jwt.js";
 
 const REFRESH_COOKIE_NAME = "refreshToken";
+const devStoreDir = new URL("../../../.data/", import.meta.url);
+const devAuthStore = new URL("../../../.data/auth-users.json", import.meta.url);
+
+type MemoryUser = {
+  _id: string;
+  email: string;
+  passwordHash: string;
+  role: UserRole;
+  refreshToken: {
+    tokenHash: string;
+    createdAt: Date;
+  } | null;
+};
+
+type GoogleTokenInfo = {
+  aud?: string;
+  sub?: string;
+  email?: string;
+  email_verified?: boolean | string;
+};
+
+const memoryUsers = new Map<string, MemoryUser>();
+let hasLoadedDevUsers = false;
+
+function isDbConnected() {
+  return mongoose.connection.readyState === 1;
+}
+
+async function loadDevUsers() {
+  if (hasLoadedDevUsers) {
+    return;
+  }
+
+  hasLoadedDevUsers = true;
+  try {
+    const raw = await readFile(devAuthStore, "utf8");
+    const users = JSON.parse(raw) as MemoryUser[];
+    memoryUsers.clear();
+    for (const user of users) {
+      memoryUsers.set(user._id, {
+        ...user,
+        refreshToken: user.refreshToken
+          ? { ...user.refreshToken, createdAt: new Date(user.refreshToken.createdAt) }
+          : null
+      });
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw err;
+    }
+  }
+}
+
+async function saveDevUsers() {
+  await mkdir(devStoreDir, { recursive: true });
+  await writeFile(devAuthStore, JSON.stringify(Array.from(memoryUsers.values()), null, 2));
+}
 
 function hashRefreshToken(token: string) {
   // bcrypt gives us an adaptive hash; we also include a fast breach check using sha256.
   return bcrypt.hash(token, 10);
+}
+
+async function verifyGoogleCredential(credential: string) {
+  if (!env.GOOGLE_CLIENT_ID) {
+    const err = new Error("Google login is not configured") as Error & { statusCode?: number; code?: string };
+    err.statusCode = 503;
+    err.code = "GOOGLE_AUTH_NOT_CONFIGURED";
+    throw err;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+  } catch {
+    const err = new Error("Google login is temporarily unavailable") as Error & {
+      statusCode?: number;
+      code?: string;
+    };
+    err.statusCode = 503;
+    err.code = "GOOGLE_AUTH_UNAVAILABLE";
+    throw err;
+  }
+
+  if (!response.ok) {
+    const err = new Error("Google login failed") as Error & { statusCode?: number; code?: string };
+    err.statusCode = 401;
+    err.code = "GOOGLE_TOKEN_INVALID";
+    throw err;
+  }
+
+  const payload = (await response.json()) as GoogleTokenInfo;
+  const emailVerified = payload.email_verified === true || payload.email_verified === "true";
+  if (payload.aud !== env.GOOGLE_CLIENT_ID || !payload.sub || !payload.email || !emailVerified) {
+    const err = new Error("Google login failed") as Error & { statusCode?: number; code?: string };
+    err.statusCode = 401;
+    err.code = "GOOGLE_TOKEN_INVALID";
+    throw err;
+  }
+
+  return {
+    googleId: payload.sub,
+    email: payload.email.toLowerCase()
+  };
 }
 
 function canUseDevAuthFallback() {
@@ -34,7 +135,33 @@ function createDevSession(email: string, role: UserRole = "buyer") {
 
 export async function register(input: { email: string; password: string; role: UserRole; firstName?: string; lastName?: string }) {
   if (canUseDevAuthFallback()) {
-    return createDevSession(input.email, input.role);
+    await loadDevUsers();
+    const exists = Array.from(memoryUsers.values()).find((user) => user.email === input.email);
+    if (exists) {
+      const err = new Error("Email already in use") as Error & { statusCode?: number; code?: string };
+      err.statusCode = 409;
+      err.code = "CONFLICT";
+      throw err;
+    }
+
+    const user: MemoryUser = {
+      _id: new mongoose.Types.ObjectId().toString(),
+      email: input.email,
+      passwordHash: await bcrypt.hash(input.password, 12),
+      role: input.role,
+      refreshToken: null
+    };
+
+    const accessToken = signAccess({ sub: user._id, email: user.email, role: user.role });
+    const refreshToken = signRefresh({ sub: user._id });
+    user.refreshToken = {
+      tokenHash: await hashRefreshToken(refreshToken),
+      createdAt: new Date()
+    };
+    memoryUsers.set(user._id, user);
+    await saveDevUsers();
+
+    return { user, accessToken, refreshToken };
   }
 
   const exists = await User.findOne({ email: input.email }).lean().exec();
@@ -69,7 +196,32 @@ export async function register(input: { email: string; password: string; role: U
 
 export async function login(input: { email: string; password: string }) {
   if (canUseDevAuthFallback()) {
-    return createDevSession(input.email);
+    await loadDevUsers();
+    const user = Array.from(memoryUsers.values()).find((candidate) => candidate.email === input.email);
+    if (!user) {
+      const err = new Error("Invalid email or password") as Error & { statusCode?: number; code?: string };
+      err.statusCode = 401;
+      err.code = "UNAUTHORIZED";
+      throw err;
+    }
+
+    const ok = await bcrypt.compare(input.password, user.passwordHash);
+    if (!ok) {
+      const err = new Error("Invalid email or password") as Error & { statusCode?: number; code?: string };
+      err.statusCode = 401;
+      err.code = "UNAUTHORIZED";
+      throw err;
+    }
+
+    const accessToken = signAccess({ sub: user._id, email: user.email, role: user.role });
+    const refreshToken = signRefresh({ sub: user._id });
+    user.refreshToken = {
+      tokenHash: await hashRefreshToken(refreshToken),
+      createdAt: new Date()
+    };
+    await saveDevUsers();
+
+    return { user, accessToken, refreshToken };
   }
 
   const user = await User.findOne({ email: input.email }).exec();
@@ -98,9 +250,84 @@ export async function login(input: { email: string; password: string }) {
   return { user, accessToken, refreshToken };
 }
 
+export async function googleLogin(credential: string) {
+  const googleUser = await verifyGoogleCredential(credential);
+
+  if (!isDbConnected()) {
+    await loadDevUsers();
+    let user = Array.from(memoryUsers.values()).find((candidate) => candidate.email === googleUser.email);
+
+    if (!user) {
+      user = {
+        _id: new mongoose.Types.ObjectId().toString(),
+        email: googleUser.email,
+        passwordHash: await bcrypt.hash(`google:${googleUser.googleId}:${googleUser.email}`, 12),
+        role: "buyer",
+        refreshToken: null
+      };
+      memoryUsers.set(user._id, user);
+    }
+
+    const accessToken = signAccess({ sub: user._id, email: user.email, role: user.role });
+    const refreshToken = signRefresh({ sub: user._id });
+    user.refreshToken = {
+      tokenHash: await hashRefreshToken(refreshToken),
+      createdAt: new Date()
+    };
+    await saveDevUsers();
+
+    return { user, accessToken, refreshToken };
+  }
+
+  let user = await User.findOne({ email: googleUser.email }).exec();
+  if (!user) {
+    user = await User.create({
+      email: googleUser.email,
+      passwordHash: await bcrypt.hash(`google:${googleUser.googleId}:${googleUser.email}`, 12),
+      role: "buyer"
+    });
+  }
+
+  const accessToken = signAccess({ sub: String(user._id), email: user.email, role: user.role });
+  const refreshToken = signRefresh({ sub: String(user._id) });
+  const refreshHash = await hashRefreshToken(refreshToken);
+
+  user.refreshToken = { tokenHash: refreshHash, createdAt: new Date() };
+  await user.save();
+
+  return { user, accessToken, refreshToken };
+}
+
 export async function refreshSession(input: { userId: string; presentedRefreshToken: string }) {
-  if (canUseDevAuthFallback() && input.userId.startsWith("dev:")) {
-    return createDevSession(input.userId.slice("dev:".length));
+  if (!isDbConnected()) {
+    await loadDevUsers();
+    const user = memoryUsers.get(input.userId);
+    if (!user || !user.refreshToken?.tokenHash) {
+      const err = new Error("Refresh token invalid") as Error & { statusCode?: number; code?: string };
+      err.statusCode = 401;
+      err.code = "REFRESH_TOKEN_INVALID";
+      throw err;
+    }
+
+    const match = await bcrypt.compare(input.presentedRefreshToken, user.refreshToken.tokenHash);
+    if (!match) {
+      user.refreshToken = null;
+      await saveDevUsers();
+      const err = new Error("Refresh token invalid") as Error & { statusCode?: number; code?: string };
+      err.statusCode = 401;
+      err.code = "REFRESH_TOKEN_INVALID";
+      throw err;
+    }
+
+    const accessToken = signAccess({ sub: user._id, email: user.email, role: user.role });
+    const refreshToken = signRefresh({ sub: user._id });
+    user.refreshToken = {
+      tokenHash: await hashRefreshToken(refreshToken),
+      createdAt: new Date()
+    };
+    await saveDevUsers();
+
+    return { user, accessToken, refreshToken };
   }
 
   const user = await User.findById(input.userId).exec();
@@ -134,7 +361,13 @@ export async function refreshSession(input: { userId: string; presentedRefreshTo
 }
 
 export async function logout(userId: string) {
-  if (canUseDevAuthFallback() && userId.startsWith("dev:")) {
+  if (!isDbConnected()) {
+    await loadDevUsers();
+    const user = memoryUsers.get(userId);
+    if (user) {
+      user.refreshToken = null;
+      await saveDevUsers();
+    }
     return;
   }
 

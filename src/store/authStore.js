@@ -17,8 +17,12 @@ const useAuthStore = create((set) => ({
       tokenStore.set(refresh.data.accessToken);
       set({ user: refresh.data.user, role: refresh.data.user.role, isAuthenticated: true, isBootstrapping: false });
     } catch (err) {
-      console.error('Bootstrap failed:', err.response?.status === 503 ? 'DB not connected' : err.message);
-      set({ isBootstrapping: false });
+      const status = err.response?.status;
+      if (status && status !== 401) {
+        console.error('Bootstrap failed:', status === 503 ? 'DB not connected' : err.message);
+      }
+      tokenStore.clear();
+      set({ user: null, role: 'guest', isAuthenticated: false, isBootstrapping: false });
     }
   },
 
@@ -30,6 +34,12 @@ const useAuthStore = create((set) => ({
 
   register: async (credentials) => {
     const { data } = await client.post('/auth/register', credentials);
+    tokenStore.set(data.data.accessToken);
+    set({ user: data.data.user, role: data.data.user.role, isAuthenticated: true });
+  },
+
+  googleLogin: async (credential) => {
+    const { data } = await client.post('/auth/google', { credential });
     tokenStore.set(data.data.accessToken);
     set({ user: data.data.user, role: data.data.user.role, isAuthenticated: true });
   },

@@ -11,8 +11,11 @@ export function validate(opts: { body?: AnySchema; query?: AnySchema; params?: A
       }
       if (opts.query) {
         const parsed = opts.query.parse(req.query);
-        for (const key of Object.keys(req.query)) delete req.query[key];
-        Object.assign(req.query, parsed);
+        Object.defineProperty(req, "query", {
+          value: parsed,
+          configurable: true,
+          enumerable: true
+        });
       }
       if (opts.params) {
         const parsed = opts.params.parse(req.params);

@@ -6,7 +6,7 @@ export function errorHandler(err: AppError, _req: Request, res: Response, _next:
   console.error("APP ERROR:", err);
   const status = err.statusCode ?? 500;
   const code = err.code ?? "INTERNAL_ERROR";
-  const message = status >= 500 ? "Internal server error" : err.message;
+  const message = status >= 500 && !err.code ? "Internal server error" : err.message;
 
   return res.status(status).json({
     success: false,

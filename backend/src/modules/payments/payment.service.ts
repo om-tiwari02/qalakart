@@ -16,8 +16,11 @@ type RazorpayErrorResponse = {
 
 function assertRazorpayConfigured() {
   if (!env.RAZORPAY_KEY_ID?.trim() || !env.RAZORPAY_KEY_SECRET?.trim()) {
-    const err = new Error("Razorpay credentials are not configured") as Error & { statusCode?: number };
+    const err = new Error(
+      "Razorpay is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to backend/.env, then restart the server."
+    ) as Error & { statusCode?: number; code?: string };
     err.statusCode = 503;
+    err.code = "RAZORPAY_NOT_CONFIGURED";
     throw err;
   }
 }

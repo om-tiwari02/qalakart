@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import { env } from "./env.js";
 import { logger } from "../services/logger.js";
 
+mongoose.set("bufferCommands", false);
+
 export async function connectDb() {
   await mongoose.connect(env.MONGODB_URI, {
     serverSelectionTimeoutMS: 5000,

@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Package, ArrowRight, X } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import useUIStore from '../../store/uiStore';
+import { env } from '../../lib/env';
+import { loadGoogleIdentity } from '../../lib/googleIdentity';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,9 +17,12 @@ const schema = z.object({
 
 const AuthModal = () => {
   const { isAuthModalOpen, closeAuthModal } = useUIStore();
-  const { login, register: registerUser, isAuthenticated } = useAuthStore();
+  const { login, register: registerUser, googleLogin, isAuthenticated } = useAuthStore();
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState(null);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const googleButtonRef = useRef(null);
+  const googleInitialized = useRef(false);
   const navigate = useNavigate();
 
   const { register: registerField, handleSubmit, formState: { errors, isSubmitting } } = useForm({
@@ -30,6 +35,67 @@ const AuthModal = () => {
       navigate('/browse', { replace: true });
     }
   }, [isAuthenticated, isAuthModalOpen, closeAuthModal, navigate]);
+
+  const handleGoogleCredential = useCallback(async (credential) => {
+    setError(null);
+    setIsGoogleLoading(true);
+    try {
+      await googleLogin(credential);
+    } catch (err) {
+      console.error('Google auth failed:', err);
+      if (err.response) {
+        setError(err.response.data?.error?.message || "Google login failed");
+      } else if (err.request) {
+        setError("Cannot connect to server. Please ensure the backend is running.");
+      } else {
+        setError("Google login failed. Please try again.");
+      }
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  }, [googleLogin]);
+
+  useEffect(() => {
+    if (!isAuthModalOpen || !env.VITE_GOOGLE_CLIENT_ID || !googleButtonRef.current) return;
+
+    let cancelled = false;
+    const buttonEl = googleButtonRef.current;
+    buttonEl.innerHTML = "";
+
+    loadGoogleIdentity()
+      .then((google) => {
+        if (cancelled) return;
+        if (!googleInitialized.current) {
+          google.accounts.id.initialize({
+            client_id: env.VITE_GOOGLE_CLIENT_ID,
+            callback: (response) => {
+              if (response.credential) {
+                handleGoogleCredential(response.credential);
+              }
+            }
+          });
+          googleInitialized.current = true;
+        }
+
+        google.accounts.id.renderButton(buttonEl, {
+          theme: "outline",
+          size: "large",
+          shape: "rectangular",
+          text: isLogin ? "signin_with" : "signup_with",
+          width: Math.max(240, Math.floor(buttonEl.clientWidth || 320))
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Could not load Google login. Please try again.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      buttonEl.innerHTML = "";
+    };
+  }, [handleGoogleCredential, isAuthModalOpen, isLogin]);
 
   const onSubmit = async (data) => {
     setError(null);
@@ -117,6 +183,27 @@ const AuthModal = () => {
               {isSubmitting ? 'Processing...' : (isLogin ? 'Log In' : 'Sign Up')}
               <ArrowRight className="w-4 h-4" />
             </button>
+
+            <div className="flex items-center gap-3 py-1">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">or</span>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+
+            {env.VITE_GOOGLE_CLIENT_ID ? (
+              <div
+                ref={googleButtonRef}
+                className={`min-h-10 w-full overflow-hidden rounded-xl ${isGoogleLoading ? 'pointer-events-none opacity-60' : ''}`}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setError("Google login is not configured yet. Add the Google client ID to the frontend and backend env files.")}
+                className="w-full bg-white text-slate-900 rounded-xl px-4 py-3 text-sm font-bold hover:bg-slate-100 transition-colors"
+              >
+                Continue with Google
+              </button>
+            )}
             
             <div className="text-center mt-4">
               <button 

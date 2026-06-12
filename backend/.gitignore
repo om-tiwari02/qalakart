@@ -6,6 +6,7 @@ dist/
 build/
 out/
 uploads/
+.data/
 .DS_store
 coverage/
 .nyc_output/

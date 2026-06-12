@@ -2,9 +2,16 @@ import type { Request, Response } from "express";
 
 import { env } from "../../config/env.js";
 import { verifyRefresh } from "../../utils/jwt.js";
-import { cookies, login, logout, refreshSession, register } from "./auth.service.js";
+import { cookies, googleLogin, login, logout, refreshSession, register } from "./auth.service.js";
 
-function serializeUser(user: { _id: unknown; email: string; role: string; firstName?: string; lastName?: string; profileImage?: string }) {
+function serializeUser(user: {
+  _id: unknown;
+  email: string;
+  role: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImage?: string | null;
+}) {
   const name = [user.firstName, user.lastName].filter(Boolean).join(" ");
   return {
     id: String(user._id),
@@ -45,6 +52,18 @@ export async function loginController(req: Request, res: Response) {
     data: {
       accessToken,
       user: serializeUser(user)
+    }
+  });
+}
+
+export async function googleLoginController(req: Request, res: Response) {
+  const { user, accessToken, refreshToken } = await googleLogin(req.body.credential);
+  setRefreshCookie(res, refreshToken);
+  return res.status(200).json({
+    success: true,
+    data: {
+      accessToken,
+      user: { id: String(user._id), email: user.email, role: user.role }
     }
   });
 }

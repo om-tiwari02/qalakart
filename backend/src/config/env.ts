@@ -16,6 +16,8 @@ const envSchema = z.object({
 
   CLIENT_URL: z.string().min(1),
   CORS_ORIGINS: z.string().min(1),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
 
   ENCRYPTION_KEY: z.union([z.string().length(64), z.literal(""), z.undefined()]),
   SENTRY_DSN: z.string().optional(),
