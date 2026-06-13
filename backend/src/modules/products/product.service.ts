@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Product } from "./product.model.js";
+import { User } from "../users/user.model.js";
 
 const memoryProducts: any[] = [];
 
@@ -8,11 +9,24 @@ function isDbConnected() {
 }
 
 export async function createProduct(userId: string, data: any) {
+  let creatorName = "Creator";
+  if (isDbConnected()) {
+    try {
+      const user = await User.findById(userId).lean().exec();
+      if (user) {
+        creatorName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email;
+      }
+    } catch (err) {
+      console.error("Failed to fetch creator user details:", err);
+    }
+  }
+
   if (!isDbConnected()) {
     const product = {
-      _id: new mongoose.Types.ObjectId().toString(),
       ...data,
+      _id: new mongoose.Types.ObjectId().toString(),
       userId,
+      creatorName,
       isDeleted: false,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -21,19 +35,20 @@ export async function createProduct(userId: string, data: any) {
     return product;
   }
 
-  const product = new Product({ ...data, userId });
+  const product = new Product({ ...data, userId, creatorName });
   await product.save();
   return product;
 }
 
 export async function getProducts(query: any) {
-  const { page, limit, search, category } = query;
+  const { page, limit, search, category, userId } = query;
 
   if (!isDbConnected()) {
     const normalizedSearch = search?.toLowerCase();
     const filtered = memoryProducts.filter((product) => {
       if (product.isDeleted) return false;
       if (category && product.category !== category) return false;
+      if (userId && String(product.userId) !== String(userId)) return false;
       if (!normalizedSearch) return true;
 
       return `${product.title} ${product.description}`.toLowerCase().includes(normalizedSearch);
@@ -61,6 +76,9 @@ export async function getProducts(query: any) {
   }
   if (category) {
     filter.category = category;
+  }
+  if (userId) {
+    filter.userId = userId;
   }
 
   const [items, total] = await Promise.all([

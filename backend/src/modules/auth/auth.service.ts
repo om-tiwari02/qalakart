@@ -374,7 +374,24 @@ export async function logout(userId: string) {
   await User.updateOne({ _id: userId }, { $set: { refreshToken: null } }).exec();
 }
 
+export async function upgradeUserToCreator(userId: string) {
+  if (!isDbConnected()) {
+    await loadDevUsers();
+    const user = memoryUsers.get(userId);
+    if (user) {
+      user.role = "creator";
+      await saveDevUsers();
+    }
+    return;
+  }
+
+  if (!userId.startsWith("dev:")) {
+    await User.findByIdAndUpdate(userId, { $set: { role: "creator" } }).exec();
+  }
+}
+
 export const cookies = {
   REFRESH_COOKIE_NAME
 };
+
 

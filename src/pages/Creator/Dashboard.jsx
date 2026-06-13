@@ -34,6 +34,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
+import { client } from '../../lib/api/client';
+import { productService } from '../../services/productService';
 
 const InstagramIcon = ({ className }) => (
   <svg 
@@ -59,6 +61,31 @@ const Dashboard = () => {
   const [showGrowthModal, setShowGrowthModal] = React.useState(false);
   const [deadlines, setDeadlines] = React.useState({}); // orderId -> date
 
+  const [products, setProducts] = React.useState([]);
+  const [isLoadingProducts, setIsLoadingProducts] = React.useState(true);
+
+  const fetchCreatorProducts = React.useCallback(async () => {
+    if (!user?.id && !user?._id) return;
+    setIsLoadingProducts(true);
+    try {
+      const { data } = await client.get('/products', {
+        params: {
+          userId: user.id || user._id,
+          limit: 100
+        }
+      });
+      setProducts(data.data || []);
+    } catch (err) {
+      toast.error('Failed to fetch listed products');
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  }, [user]);
+
+  React.useEffect(() => {
+    fetchCreatorProducts();
+  }, [fetchCreatorProducts]);
+
   const handleSetDeadline = (orderId, date) => {
     if (deadlines[orderId]) return; // Only set once
     setDeadlines({ ...deadlines, [orderId]: date });
@@ -75,25 +102,58 @@ const Dashboard = () => {
     images: []
   });
 
-  const handleProductImageUpload = (e) => {
+  const handleProductImageUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (newProduct.images.length + files.length > 5) {
       toast.error('Maximum 5 images allowed');
       return;
     }
-    const urls = files.map(f => URL.createObjectURL(f));
-    setNewProduct(prev => ({ ...prev, images: [...prev.images, ...urls] }));
+
+    const toastId = toast.loading('Uploading images...');
+    try {
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append('images', file);
+      });
+
+      const { data } = await client.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      const newUrls = data.data.imageUrls;
+      setNewProduct(prev => ({ ...prev, images: [...prev.images, ...newUrls] }));
+      toast.success('Images uploaded successfully!', { id: toastId });
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || err.message || 'Image upload failed', { id: toastId });
+    }
   };
 
-  const handleAddProductSubmit = (e) => {
+  const handleAddProductSubmit = async (e) => {
     e.preventDefault();
     if (newProduct.images.length === 0) {
       toast.error('Please upload at least one image');
       return;
     }
-    toast.success('✨ Product listed successfully! It will be live after a quick review.');
-    setIsAddProductModalOpen(false);
-    setNewProduct({ name: '', description: '', price: '', category: '', timeline: '3', address: '', images: [] });
+
+    const toastId = toast.loading('Listing your product...');
+    try {
+      await client.post('/products', {
+        title: newProduct.name,
+        description: newProduct.description,
+        price: Number(newProduct.price),
+        category: newProduct.category,
+        images: newProduct.images
+      });
+
+      toast.success('✨ Product listed successfully! It will be live after a quick review.', { id: toastId });
+      setIsAddProductModalOpen(false);
+      setNewProduct({ name: '', description: '', price: '', category: '', timeline: '3', address: '', images: [] });
+      fetchCreatorProducts();
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || err.message || 'Failed to list product', { id: toastId });
+    }
   };
 
   const stats = [
@@ -105,7 +165,7 @@ const Dashboard = () => {
     { id: 'pay_success', label: 'Payment Successful', value: '₹24,500', icon: <ShieldCheck />, color: 'from-green-500/20 to-emerald-500/20', text: 'text-green-400' },
     { id: 'pay_pending', label: 'Payment Pending', value: '₹1,200', icon: <CreditCard />, color: 'from-red-500/20 to-orange-500/20', text: 'text-red-400' },
     { id: 'demands', label: 'Active Demands', value: '3', icon: <MessageSquare />, color: 'from-accent2/20 to-blue-500/20', text: 'text-accent2' },
-    { id: 'products', label: 'My Products', value: '12 Items', icon: <Package />, color: 'from-pink-500/20 to-rose-500/20', text: 'text-pink-400' },
+    { id: 'products', label: 'My Products', value: isLoadingProducts ? 'Loading...' : `${products.length} Items`, icon: <Package />, color: 'from-pink-500/20 to-rose-500/20', text: 'text-pink-400' },
     { id: 'customs', label: 'Customization Requests', value: '2 New', icon: <FileText />, color: 'from-indigo-500/20 to-blue-500/20', text: 'text-indigo-400' },
   ];
 
@@ -262,18 +322,28 @@ const Dashboard = () => {
         case 'products':
           return (
             <div className="grid grid-cols-2 gap-4">
-              {[
-                { name: 'Nebula Clock', stock: 5, price: '₹1200' },
-                { name: 'Custom Sketch', stock: 'Unlimited', price: '₹800' },
-                { name: 'Wooden Keychain', stock: 12, price: '₹250' },
-                { name: 'Paper Flowers', stock: 8, price: '₹550' },
-              ].map(p => (
-                <div key={p.name} className="glass-card p-4 rounded-2xl text-center">
-                  <p className="text-white font-bold text-sm mb-1">{p.name}</p>
-                  <p className="text-xs text-slate-500 mb-2">Stock: <span className="text-accent1 font-bold">{p.stock}</span></p>
-                  <span className="text-xs font-bold text-white">{p.price}</span>
-                </div>
-              ))}
+              {isLoadingProducts ? (
+                <div className="col-span-2 text-center text-slate-400">Loading your products...</div>
+              ) : products.length === 0 ? (
+                <div className="col-span-2 text-center text-slate-400">You haven't listed any products yet.</div>
+              ) : (
+                products.map(p => (
+                  <div key={p._id || p.id} className="glass-card p-4 rounded-2xl text-center flex flex-col justify-between">
+                    <div>
+                      {p.images && p.images[0] && (
+                        <img 
+                          src={productService.getImageUrl(p.images[0])} 
+                          alt={p.title} 
+                          className="w-full h-24 object-cover rounded-xl mb-2 border border-white/5" 
+                        />
+                      )}
+                      <p className="text-white font-bold text-sm mb-1 line-clamp-1">{p.title}</p>
+                      <p className="text-xs text-slate-500 mb-2">Category: <span className="text-accent1 font-bold">{p.category}</span></p>
+                    </div>
+                    <span className="text-xs font-bold text-white">₹{p.price}</span>
+                  </div>
+                ))
+              )}
             </div>
           );
         case 'customs':
@@ -559,7 +629,7 @@ const AddProductModal = ({ onClose, onSubmit, newProduct, setNewProduct, handleI
               <div className="grid grid-cols-5 gap-2">
                 {newProduct.images.map((img, idx) => (
                   <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group">
-                    <img src={img} alt="preview" className="w-full h-full object-cover" />
+                    <img src={productService.getImageUrl(img)} alt="preview" className="w-full h-full object-cover" />
                     <button 
                       type="button"
                       onClick={() => setNewProduct(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
@@ -570,11 +640,23 @@ const AddProductModal = ({ onClose, onSubmit, newProduct, setNewProduct, handleI
                   </div>
                 ))}
                 {newProduct.images.length < 5 && (
-                  <label className="aspect-square rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 hover:border-accent1/50 transition-all">
-                    <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
-                    <ImageIcon className="w-6 h-6 text-slate-500 mb-1" />
-                    <span className="text-[8px] text-slate-500 font-bold uppercase">Add</span>
-                  </label>
+                  <>
+                    <input 
+                      id="product-image-upload"
+                      type="file" 
+                      multiple 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleImageUpload} 
+                    />
+                    <label 
+                      htmlFor="product-image-upload"
+                      className="aspect-square rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 hover:border-accent1/50 transition-all"
+                    >
+                      <ImageIcon className="w-6 h-6 text-slate-500 mb-1 pointer-events-none" />
+                      <span className="text-[8px] text-slate-500 font-bold uppercase pointer-events-none">Add</span>
+                    </label>
+                  </>
                 )}
               </div>
             </div>

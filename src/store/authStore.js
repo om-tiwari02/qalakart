@@ -15,33 +15,54 @@ const useAuthStore = create((set) => ({
     try {
       const { data: refresh } = await refreshClient.post('/auth/refresh');
       tokenStore.set(refresh.data.accessToken);
-      set({ user: refresh.data.user, role: refresh.data.user.role, isAuthenticated: true, isBootstrapping: false });
+      set({
+        user: refresh.data.user,
+        role: refresh.data.user.role,
+        isSubscribed: refresh.data.user.role === 'creator',
+        isAuthenticated: true,
+        isBootstrapping: false
+      });
     } catch (err) {
       const status = err.response?.status;
       if (status && status !== 401) {
         console.error('Bootstrap failed:', status === 503 ? 'DB not connected' : err.message);
       }
       tokenStore.clear();
-      set({ user: null, role: 'guest', isAuthenticated: false, isBootstrapping: false });
+      set({ user: null, role: 'guest', isAuthenticated: false, isSubscribed: false, isBootstrapping: false });
     }
   },
 
   login: async (credentials) => {
     const { data } = await client.post('/auth/login', credentials);
     tokenStore.set(data.data.accessToken);
-    set({ user: data.data.user, role: data.data.user.role, isAuthenticated: true });
+    set({
+      user: data.data.user,
+      role: data.data.user.role,
+      isSubscribed: data.data.user.role === 'creator',
+      isAuthenticated: true
+    });
   },
 
   register: async (credentials) => {
     const { data } = await client.post('/auth/register', credentials);
     tokenStore.set(data.data.accessToken);
-    set({ user: data.data.user, role: data.data.user.role, isAuthenticated: true });
+    set({
+      user: data.data.user,
+      role: data.data.user.role,
+      isSubscribed: data.data.user.role === 'creator',
+      isAuthenticated: true
+    });
   },
 
   googleLogin: async (credential) => {
     const { data } = await client.post('/auth/google', { credential });
     tokenStore.set(data.data.accessToken);
-    set({ user: data.data.user, role: data.data.user.role, isAuthenticated: true });
+    set({
+      user: data.data.user,
+      role: data.data.user.role,
+      isSubscribed: data.data.user.role === 'creator',
+      isAuthenticated: true
+    });
   },
 
   logout: async () => {
@@ -54,7 +75,11 @@ const useAuthStore = create((set) => ({
     set({ user: null, role: 'guest', isAuthenticated: false, isSubscribed: false, hasUsedCoupon: false });
   },
 
-  setSubscribed: () => set({ isSubscribed: true }),
+  setSubscribed: () => set((state) => ({
+    isSubscribed: true,
+    role: 'creator',
+    user: state.user ? { ...state.user, role: 'creator' } : null
+  })),
   updateUser: (newData) => set((state) => ({ user: { ...state.user, ...newData } })),
   uploadProfileImage: async (imageBase64) => {
     const { data } = await client.patch('/users/me/profile-image', { imageBase64 });

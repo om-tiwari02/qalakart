@@ -1,23 +1,28 @@
 import { client } from "../lib/api/client";
 import { mockProducts } from "../data/mockData";
 
+const toApiProduct = (product) => ({
+  ...product,
+  _id: product._id || product.id,
+  title: product.title || product.name,
+  images: product.images?.length ? product.images : [product.image],
+  creatorName: product.creatorName || product.creator
+});
+
+const mockApiProducts = () => mockProducts.map(toApiProduct);
+
 export const productService = {
   async list(params = {}) {
     try {
       const { data } = await client.get("/products", { params });
-      return data.data; // Backend returns { status: "success", data: [...] }
-    } catch (error) {
-      if (error.response?.status !== 503) {
-        throw error;
-      }
+      const products = Array.isArray(data.data) ? data.data : [];
 
-      return mockProducts.map((product) => ({
-        ...product,
-        _id: product.id,
-        title: product.name,
-        images: [product.image],
-        creatorName: product.creator
-      }));
+      const apiProducts = products.map(toApiProduct);
+      const mocks = mockApiProducts();
+
+      return [...apiProducts, ...mocks];
+    } catch (error) {
+      return mockApiProducts();
     }
   },
 
