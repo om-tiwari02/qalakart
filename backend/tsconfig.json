@@ -10,11 +10,9 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    "noPropertyAccessFromIndexSignature": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node", "multer"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

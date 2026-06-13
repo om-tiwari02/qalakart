@@ -23,13 +23,13 @@ export async function getCreatorOrdersController(req: Request, res: Response) {
 
 export async function getOrderController(req: Request, res: Response) {
   const userId = req.user!.sub as string;
-  const { id } = req.params;
+  const id = req.params.id as string;
   const order = await getOrderById(userId, id);
   return res.status(200).json({ success: true, data: order });
 }
 
 export async function updateOrderStatusController(req: Request, res: Response) {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const { status } = req.body;
   const order = await updateOrderStatus(id, status);
   return res.status(200).json({ success: true, data: order });

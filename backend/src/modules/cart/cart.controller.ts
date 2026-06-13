@@ -16,7 +16,7 @@ export async function addToCartController(req: Request, res: Response) {
 
 export async function removeFromCartController(req: Request, res: Response) {
   const userId = req.user!.sub as string;
-  const { productId } = req.params;
+  const productId = req.params.productId as string;
   const cart = await removeFromCart(userId, productId);
   return res.status(200).json({ success: true, data: cart });
 }

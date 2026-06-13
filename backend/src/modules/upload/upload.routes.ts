@@ -17,21 +17,21 @@ if (!fs.existsSync(uploadDir)) {
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req: Express.Request, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (_req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-const fileFilter = (req: any, file: any, cb: any) => {
+const fileFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   // Accept only image files
   if (file.mimetype.startsWith("image/")) {
     cb(null, true);
   } else {
-    cb(new Error("Only image files are allowed"), false);
+    cb(new Error("Only image files are allowed"));
   }
 };
 
@@ -50,29 +50,12 @@ uploadRouter.use(requireAuth);
 
 uploadRouter.post(
   "/",
-  // Pre-upload logging
+  // Multer file upload with error handling
   (req: Request, res: Response, next: NextFunction) => {
-    console.log("=== UPLOAD ROUTE PRE-MIDDLEWARE ===");
-    console.log("User authenticated:", req.user ? `${req.user.sub}` : "NO");
-    console.log("Content-Type:", req.headers["content-type"]);
-    console.log("Content-Length:", req.headers["content-length"]);
-    console.log("Proceeding to multer...");
-    next();
-  },
-  // Multer file upload
-  (req: Request, res: Response, next: NextFunction) => {
-    upload.array("images", 5)(req, res, (err) => {
+    upload.array("images", 5)(req, res, (err: any) => {
       if (err) {
-        console.log("=== MULTER ERROR CAUGHT IN WRAPPER ===");
-        console.error("Error type:", err.constructor.name);
-        console.error("Error message:", err.message);
-        console.error("Error:", err);
-        
         if (err instanceof multer.MulterError) {
-          console.error("  MulterError code:", err.code);
-          console.error("  Field:", err.field);
-          
-          if (err.code === "FILE_TOO_LARGE") {
+          if (err.code === "LIMIT_FILE_SIZE") {
             return res.status(400).json({
               success: false,
               error: {
@@ -90,16 +73,14 @@ uploadRouter.post(
               }
             });
           }
-        } else {
-          // Custom file filter errors
-          return res.status(400).json({
-            success: false,
-            error: {
-              code: "UPLOAD_ERROR",
-              message: err.message || "File upload error"
-            }
-          });
         }
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: "UPLOAD_ERROR",
+            message: err.message || "File upload error"
+          }
+        });
       }
       next();
     });
