@@ -156,6 +156,81 @@ const Dashboard = () => {
     }
   };
 
+  const [editingProduct, setEditingProduct] = React.useState(null);
+  const [editForm, setEditForm] = React.useState({
+    name: '',
+    description: '',
+    price: '',
+    category: '',
+    images: []
+  });
+
+  React.useEffect(() => {
+    if (editingProduct) {
+      setEditForm({
+        name: editingProduct.title || '',
+        description: editingProduct.description || '',
+        price: editingProduct.price || '',
+        category: editingProduct.category || '',
+        images: editingProduct.images || []
+      });
+    }
+  }, [editingProduct]);
+
+  const handleEditProductImageUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (editForm.images.length + files.length > 5) {
+      toast.error('Maximum 5 images allowed');
+      return;
+    }
+
+    const toastId = toast.loading('Uploading images...');
+    try {
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append('images', file);
+      });
+
+      const { data } = await client.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      const newUrls = data.data.imageUrls;
+      setEditForm(prev => ({ ...prev, images: [...prev.images, ...newUrls] }));
+      toast.success('Images uploaded successfully!', { id: toastId });
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || err.message || 'Image upload failed', { id: toastId });
+    }
+  };
+
+  const handleEditProductSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    if (editForm.images.length === 0) {
+      toast.error('Please upload at least one image');
+      return;
+    }
+
+    const toastId = toast.loading('Updating product details...');
+    try {
+      await client.patch(`/products/${editingProduct._id || editingProduct.id}`, {
+        title: editForm.name,
+        description: editForm.description,
+        price: Number(editForm.price),
+        category: editForm.category,
+        images: editForm.images
+      });
+
+      toast.success('✨ Product updated successfully!', { id: toastId });
+      setEditingProduct(null);
+      fetchCreatorProducts();
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || err.message || 'Failed to update product', { id: toastId });
+    }
+  };
+
   const stats = [
     { id: 'pending', label: 'Pending Orders', value: '4', icon: <Clock />, color: 'from-blue-500/20 to-cyan-500/20', text: 'text-blue-400' },
     { id: 'active_orders', label: 'Order Tracking', value: '3 Active', icon: <Truck />, color: 'from-amber-500/20 to-orange-500/20', text: 'text-amber-400' },
@@ -340,7 +415,19 @@ const Dashboard = () => {
                       <p className="text-white font-bold text-sm mb-1 line-clamp-1">{p.title}</p>
                       <p className="text-xs text-slate-500 mb-2">Category: <span className="text-accent1 font-bold">{p.category}</span></p>
                     </div>
-                    <span className="text-xs font-bold text-white">₹{p.price}</span>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
+                      <span className="text-xs font-bold text-white">₹{p.price}</span>
+                      <button
+                        onClick={() => {
+                          onClose();
+                          setEditingProduct(p);
+                        }}
+                        className="flex items-center gap-1 text-[10px] font-bold text-accent2 hover:text-white px-2.5 py-1.5 rounded-lg bg-accent2/10 hover:bg-accent2/20 transition-all"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Edit</span>
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -472,6 +559,15 @@ const Dashboard = () => {
         )}
         {showGrowthModal && (
           <GrowthModal onClose={() => setShowGrowthModal(false)} />
+        )}
+        {editingProduct && (
+          <EditProductModal 
+            onClose={() => setEditingProduct(null)} 
+            onSubmit={handleEditProductSubmit}
+            editForm={editForm}
+            setEditForm={setEditForm}
+            handleImageUpload={handleEditProductImageUpload}
+          />
         )}
       </AnimatePresence>
 
@@ -777,6 +873,151 @@ const AddProductModal = ({ onClose, onSubmit, newProduct, setNewProduct, handleI
                 className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-accent1 to-accent2 text-white font-black uppercase tracking-widest shadow-lg shadow-accent1/20 hover:opacity-90 active:scale-95 transition-all"
               >
                 List Product
+              </button>
+            </div>
+          </form>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// ─────────────────────────── EDIT PRODUCT MODAL ──────────────────────────────
+const EditProductModal = ({ onClose, onSubmit, editForm, setEditForm, handleImageUpload }) => {
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl overflow-y-auto pt-20 pb-10">
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="glass-card max-w-2xl w-full rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent2 to-accent1" />
+        <div className="p-8">
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-accent2/10 flex items-center justify-center text-accent2">
+                <Edit3 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-outfit font-black text-white uppercase tracking-tighter">Edit Product</h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Update your creation details</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-6">
+            {/* Image Upload Area */}
+            <div className="space-y-4">
+              <label className="block text-sm font-bold text-slate-300 uppercase tracking-widest">Product Images (Up to 5)</label>
+              <div className="grid grid-cols-5 gap-2">
+                {editForm.images.map((img, idx) => (
+                  <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group">
+                    <img src={productService.getImageUrl(img)} alt="preview" className="w-full h-full object-cover" />
+                    <button 
+                      type="button"
+                      onClick={() => setEditForm(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
+                      className="absolute inset-0 bg-black/60 items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity hidden group-hover:flex"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                ))}
+                {editForm.images.length < 5 && (
+                  <>
+                    <input 
+                      id="edit-product-image-upload"
+                      type="file" 
+                      multiple 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleImageUpload} 
+                    />
+                    <label 
+                      htmlFor="edit-product-image-upload"
+                      className="aspect-square rounded-xl border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 hover:border-accent2/50 transition-all"
+                    >
+                      <ImageIcon className="w-6 h-6 text-slate-500 mb-1 pointer-events-none" />
+                      <span className="text-[8px] text-slate-500 font-bold uppercase pointer-events-none">Add</span>
+                    </label>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest">Product Name</label>
+                <input 
+                  type="text" 
+                  required
+                  value={editForm.name}
+                  onChange={e => setEditForm({...editForm, name: e.target.value})}
+                  placeholder="e.g. Handmade Ceramic Vase"
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-white focus:outline-none focus:border-accent2 transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest">Category</label>
+                <select 
+                  required
+                  value={editForm.category}
+                  onChange={e => setEditForm({...editForm, category: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-white focus:outline-none focus:border-accent2 transition-all appearance-none"
+                >
+                  <option value="" className="bg-[#0f172a]">Select Category</option>
+                  <option value="Home Decor" className="bg-[#0f172a]">Home Decor</option>
+                  <option value="Sketches & Art" className="bg-[#0f172a]">Sketches & Art</option>
+                  <option value="Resin Art" className="bg-[#0f172a]">Resin Art</option>
+                  <option value="DIY & Handcrafted" className="bg-[#0f172a]">DIY & Handcrafted</option>
+                  <option value="Merchandise" className="bg-[#0f172a]">Merchandise</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest">Description / Instructions</label>
+              <textarea 
+                required
+                rows="3"
+                value={editForm.description}
+                onChange={e => setEditForm({...editForm, description: e.target.value})}
+                placeholder="Tell buyers about your creation..."
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-accent2 transition-all resize-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest">Price (₹)</label>
+                <input 
+                  type="number" 
+                  required
+                  value={editForm.price}
+                  onChange={e => setEditForm({...editForm, price: e.target.value})}
+                  placeholder="e.g. 599"
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-white focus:outline-none focus:border-accent2 transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <button 
+                type="button" 
+                onClick={onClose} 
+                className="flex-1 py-4 rounded-2xl border border-white/10 text-white font-black uppercase tracking-widest hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-accent2 to-accent1 text-white font-black uppercase tracking-widest shadow-lg shadow-accent2/20 hover:opacity-90 active:scale-95 transition-all"
+              >
+                Save Changes
               </button>
             </div>
           </form>
