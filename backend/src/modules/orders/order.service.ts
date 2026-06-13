@@ -1,7 +1,7 @@
 import { clearCart, getCart } from "../cart/cart.service.js";
 import { Order, OrderStatus } from "./order.model.js";
 
-export async function placeOrder(userId: string, shippingAddress: string) {
+export async function placeOrder(userId: string, shippingAddress: string, paymentMethod: 'online' | 'cod' = 'cod', paymentStatus: 'pending' | 'completed' = 'pending') {
   const cart = await getCart(userId);
   if (!cart.items || cart.items.length === 0) {
     const err = new Error("Cart is empty") as Error & { statusCode?: number };
@@ -26,6 +26,8 @@ export async function placeOrder(userId: string, shippingAddress: string) {
     items: orderItems,
     totalAmount,
     shippingAddress,
+    paymentMethod,
+    paymentStatus,
     status: OrderStatus.PENDING
   });
 
@@ -35,6 +37,18 @@ export async function placeOrder(userId: string, shippingAddress: string) {
 
 export async function getOrders(userId: string) {
   return Order.find({ userId }).sort({ createdAt: -1 }).populate("items.productId").exec();
+}
+
+export async function getCreatorOrders(creatorId: string) {
+  const { Product } = await import("../products/product.model.js");
+  const creatorProducts = await Product.find({ userId: creatorId }).select("_id").exec();
+  const productIds = creatorProducts.map(p => p._id);
+
+  return Order.find({ "items.productId": { $in: productIds } })
+    .sort({ createdAt: -1 })
+    .populate("items.productId")
+    .populate("userId", "firstName lastName")
+    .exec();
 }
 
 export async function getOrderById(userId: string, orderId: string) {

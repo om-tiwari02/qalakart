@@ -20,6 +20,8 @@ export interface IOrder extends Document {
   totalAmount: number;
   status: OrderStatus;
   shippingAddress: string;
+  paymentMethod: 'online' | 'cod';
+  paymentStatus: 'pending' | 'completed';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,7 +45,9 @@ const orderSchema = new Schema<IOrder>(
       enum: Object.values(OrderStatus),
       default: OrderStatus.PENDING
     },
-    shippingAddress: { type: String, required: true }
+    shippingAddress: { type: String, required: true },
+    paymentMethod: { type: String, enum: ['online', 'cod'], default: 'cod' },
+    paymentStatus: { type: String, enum: ['pending', 'completed'], default: 'pending' }
   },
   { timestamps: true }
 );

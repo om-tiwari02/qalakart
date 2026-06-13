@@ -4,6 +4,7 @@ import { validate } from "../../middleware/validate.js";
 import {
   getOrderController,
   getOrdersController,
+  getCreatorOrdersController,
   placeOrderController,
   updateOrderStatusController
 } from "./order.controller.js";
@@ -15,5 +16,6 @@ orderRouter.use(requireAuth);
 
 orderRouter.post("/", validate(placeOrderSchema), placeOrderController);
 orderRouter.get("/", getOrdersController);
+orderRouter.get("/creator", getCreatorOrdersController);
 orderRouter.get("/:id", getOrderController);
 orderRouter.patch("/:id/status", validate(updateOrderStatusSchema), updateOrderStatusController);

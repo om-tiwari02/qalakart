@@ -57,12 +57,18 @@ const Dashboard = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = React.useState(null);
-  const [isAddProductModalOpen, setIsAddProductModalOpen] = React.useState(false);
+  const [editingProduct, setEditingProduct] = React.useState(null);
   const [showGrowthModal, setShowGrowthModal] = React.useState(false);
+  const [fullViewImage, setFullViewImage] = React.useState(null);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = React.useState(false);
   const [deadlines, setDeadlines] = React.useState({}); // orderId -> date
 
   const [products, setProducts] = React.useState([]);
   const [isLoadingProducts, setIsLoadingProducts] = React.useState(true);
+
+  const [orders, setOrders] = React.useState([]);
+  const [demands, setDemands] = React.useState([]);
+  const [isLoadingDashboard, setIsLoadingDashboard] = React.useState(true);
 
   const fetchCreatorProducts = React.useCallback(async () => {
     if (!user?.id && !user?._id) return;
@@ -82,14 +88,41 @@ const Dashboard = () => {
     }
   }, [user]);
 
+  const fetchDashboardData = React.useCallback(async () => {
+    if (!user?.id && !user?._id) return;
+    setIsLoadingDashboard(true);
+    try {
+      const [ordersRes, demandsRes] = await Promise.all([
+        client.get('/orders/creator'),
+        client.get('/demands')
+      ]);
+      setOrders(ordersRes.data.data || []);
+      // Filter out demands that are open and not accepted
+      setDemands((demandsRes.data.data || []).filter(d => d.status === 'open'));
+    } catch (err) {
+      toast.error('Failed to fetch dashboard data');
+    } finally {
+      setIsLoadingDashboard(false);
+    }
+  }, [user]);
+
   React.useEffect(() => {
     fetchCreatorProducts();
-  }, [fetchCreatorProducts]);
+    fetchDashboardData();
+  }, [fetchCreatorProducts, fetchDashboardData]);
 
-  const handleSetDeadline = (orderId, date) => {
+  const handleSetDeadline = async (orderId, date) => {
     if (deadlines[orderId]) return; // Only set once
-    setDeadlines({ ...deadlines, [orderId]: date });
-    toast.success('Deadline locked successfully!');
+    
+    const toastId = toast.loading('Locking deadline and moving to Active Orders...');
+    try {
+      await client.patch(`/orders/${orderId}/status`, { status: 'processing' });
+      setDeadlines({ ...deadlines, [orderId]: date });
+      toast.success('Deadline locked successfully!', { id: toastId });
+      fetchDashboardData(); // Refresh the active/pending orders lists
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || 'Failed to set deadline', { id: toastId });
+    }
   };
 
   const [newProduct, setNewProduct] = React.useState({
@@ -156,7 +189,6 @@ const Dashboard = () => {
     }
   };
 
-  const [editingProduct, setEditingProduct] = React.useState(null);
   const [editForm, setEditForm] = React.useState({
     name: '',
     description: '',
@@ -231,17 +263,37 @@ const Dashboard = () => {
     }
   };
 
+  const calculateCreatorTotal = (order) => {
+    return order.items.reduce((sum, item) => {
+      const isCreatorProduct = item.productId?.userId === user?.id || item.productId?.userId === user?._id || item.productId?.userId === user?.sub;
+      if (isCreatorProduct) {
+        return sum + (item.price * item.quantity);
+      }
+      return sum;
+    }, 0);
+  };
+
+  const pendingOrders = orders.filter(o => o.status === 'pending');
+  const activeOrders = orders.filter(o => o.status === 'processing' || o.status === 'shipped');
+  const completedOrders = orders.filter(o => o.status === 'delivered');
+  
+  const paySuccessOrders = orders.filter(o => o.paymentStatus === 'completed' || (o.paymentMethod === 'cod' && o.status === 'delivered'));
+  const payPendingOrders = orders.filter(o => !(o.paymentStatus === 'completed' || (o.paymentMethod === 'cod' && o.status === 'delivered')));
+  
+  const paySuccessAmount = paySuccessOrders.reduce((sum, o) => sum + calculateCreatorTotal(o), 0);
+  const payPendingAmount = payPendingOrders.reduce((sum, o) => sum + calculateCreatorTotal(o), 0);
+
   const stats = [
-    { id: 'pending', label: 'Pending Orders', value: '4', icon: <Clock />, color: 'from-blue-500/20 to-cyan-500/20', text: 'text-blue-400' },
-    { id: 'active_orders', label: 'Order Tracking', value: '3 Active', icon: <Truck />, color: 'from-amber-500/20 to-orange-500/20', text: 'text-amber-400' },
-    { id: 'subscription', label: 'Subscription Period', value: '24 Days Left', icon: <Calendar />, color: 'from-purple-500/20 to-indigo-500/20', text: 'text-purple-400' },
+    { id: 'pending', label: 'Pending Orders', value: isLoadingDashboard ? '-' : pendingOrders.length.toString(), icon: <Clock />, color: 'from-blue-500/20 to-cyan-500/20', text: 'text-blue-400' },
+    { id: 'active_orders', label: 'Order Tracking', value: isLoadingDashboard ? '-' : `${activeOrders.length} Active`, icon: <Truck />, color: 'from-amber-500/20 to-orange-500/20', text: 'text-amber-400' },
+    { id: 'subscription', label: 'Subscription Period', value: 'Active', icon: <Calendar />, color: 'from-purple-500/20 to-indigo-500/20', text: 'text-purple-400' },
     { id: 'reviews', label: 'Customer Reviews', value: '4.8/5', icon: <Star />, color: 'from-yellow-500/20 to-orange-500/20', text: 'text-yellow-400' },
-    { id: 'coins', label: 'QalaCoins Earned', value: user?.qalaCoins || '450', icon: <Coins />, color: 'from-accent1/20 to-emerald-500/20', text: 'text-accent1' },
-    { id: 'pay_success', label: 'Payment Successful', value: '₹24,500', icon: <ShieldCheck />, color: 'from-green-500/20 to-emerald-500/20', text: 'text-green-400' },
-    { id: 'pay_pending', label: 'Payment Pending', value: '₹1,200', icon: <CreditCard />, color: 'from-red-500/20 to-orange-500/20', text: 'text-red-400' },
-    { id: 'demands', label: 'Active Demands', value: '3', icon: <MessageSquare />, color: 'from-accent2/20 to-blue-500/20', text: 'text-accent2' },
+    { id: 'coins', label: 'QalaCoins Earned', value: user?.qalaCoins || '0', icon: <Coins />, color: 'from-accent1/20 to-emerald-500/20', text: 'text-accent1' },
+    { id: 'pay_success', label: 'Payment Successful', value: `₹${paySuccessAmount}`, icon: <ShieldCheck />, color: 'from-green-500/20 to-emerald-500/20', text: 'text-green-400' },
+    { id: 'pay_pending', label: 'Payment Pending', value: `₹${payPendingAmount}`, icon: <CreditCard />, color: 'from-red-500/20 to-orange-500/20', text: 'text-red-400' },
+    { id: 'demands', label: 'Active Demands', value: isLoadingDashboard ? '-' : demands.length.toString(), icon: <MessageSquare />, color: 'from-accent2/20 to-blue-500/20', text: 'text-accent2' },
     { id: 'products', label: 'My Products', value: isLoadingProducts ? 'Loading...' : `${products.length} Items`, icon: <Package />, color: 'from-pink-500/20 to-rose-500/20', text: 'text-pink-400' },
-    { id: 'customs', label: 'Customization Requests', value: '2 New', icon: <FileText />, color: 'from-indigo-500/20 to-blue-500/20', text: 'text-indigo-400' },
+    { id: 'customs', label: 'Customization Requests', value: isLoadingDashboard ? '-' : `${demands.filter(d => d.images?.length > 0).length} New`, icon: <FileText />, color: 'from-indigo-500/20 to-blue-500/20', text: 'text-indigo-400' },
   ];
 
   const DetailModal = ({ type, onClose }) => {
@@ -250,30 +302,29 @@ const Dashboard = () => {
         case 'pending':
           return (
             <div className="space-y-4">
-              {[
-                { id: 'ORD-5521', product: 'Nebula Resin Clock', price: '₹1,200', buyer: 'Rahul V.', date: '22 Apr' },
-                { id: 'ORD-5522', product: 'Custom Sketch', price: '₹800', buyer: 'Sonia M.', date: '22 Apr' },
-              ].map(order => (
-                <div key={order.id} className="glass-card p-4 rounded-2xl border border-white/5 border-white/10 transition-all">
+              {pendingOrders.length === 0 ? (
+                <p className="text-slate-400 text-center py-4">No pending orders.</p>
+              ) : pendingOrders.map(order => (
+                <div key={order._id} className="glass-card p-4 rounded-2xl border border-white/5 border-white/10 transition-all">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h4 className="text-white font-bold">{order.product}</h4>
-                      <p className="text-xs text-slate-500">Order #{order.id} • {order.buyer}</p>
+                      <h4 className="text-white font-bold">{order.items[0]?.productId?.title || 'Multiple Items'}</h4>
+                      <p className="text-xs text-slate-500">Order #{order._id.slice(-6).toUpperCase()} • {order.userId?.firstName} {order.userId?.lastName}</p>
                     </div>
-                    <span className="text-accent1 font-bold">{order.price}</span>
+                    <span className="text-accent1 font-bold">₹{order.totalAmount}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    {deadlines[order.id] ? (
+                    {deadlines[order._id] ? (
                       <div className="flex items-center gap-2 text-xs text-green-400 font-bold bg-green-400/10 px-3 py-1.5 rounded-lg">
                         <Check className="w-3 h-3" />
-                        Deadline: {deadlines[order.id]}
+                        Deadline: {deadlines[order._id]}
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 flex-1">
                         <input 
                           type="date" 
                           className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
-                          onBlur={(e) => e.target.value && handleSetDeadline(order.id, e.target.value)}
+                          onBlur={(e) => e.target.value && handleSetDeadline(order._id, e.target.value)}
                         />
                         <span className="text-[10px] text-slate-500 uppercase font-bold">Set once</span>
                       </div>
@@ -286,17 +337,16 @@ const Dashboard = () => {
         case 'active_orders':
           return (
             <div className="space-y-4">
-              {[
-                { id: 'ORD-4401', product: 'Ocean Table top', status: 'Shipped', progress: 75 },
-                { id: 'ORD-4402', product: 'Wooden Lamp', status: 'Confirmed', progress: 40 },
-              ].map(order => (
-                <div key={order.id} className="glass-card p-4 rounded-2xl">
+              {activeOrders.length === 0 ? (
+                <p className="text-slate-400 text-center py-4">No active orders.</p>
+              ) : activeOrders.map(order => (
+                <div key={order._id} className="glass-card p-4 rounded-2xl">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-white font-bold">{order.product}</span>
-                    <span className="text-xs text-amber-400 font-bold">{order.status}</span>
+                    <span className="text-white font-bold">{order.items[0]?.productId?.title || 'Multiple Items'}</span>
+                    <span className="text-xs text-amber-400 font-bold uppercase">{order.status}</span>
                   </div>
                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-400" style={{ width: `${order.progress}%` }} />
+                    <div className="h-full bg-amber-400" style={{ width: order.status === 'shipped' ? '75%' : '40%' }} />
                   </div>
                 </div>
               ))}
@@ -305,21 +355,7 @@ const Dashboard = () => {
         case 'reviews':
           return (
             <div className="space-y-4">
-              {[
-                { product: 'Nebula Clock', reviews: 24, rating: 4.8 },
-                { product: 'Custom Sketch', reviews: 12, rating: 4.9 },
-              ].map(p => (
-                <div key={p.product} className="glass-card p-4 rounded-2xl flex justify-between items-center">
-                  <div>
-                    <h4 className="text-white font-bold">{p.product}</h4>
-                    <p className="text-xs text-slate-500">{p.reviews} Reviews Received</p>
-                  </div>
-                  <div className="flex items-center gap-1 text-yellow-400">
-                    <Star className="w-3 h-3 fill-current" />
-                    <span className="font-bold">{p.rating}</span>
-                  </div>
-                </div>
-              ))}
+              <p className="text-slate-400 text-center py-4">No reviews received yet.</p>
             </div>
           );
         case 'coins':
@@ -345,16 +381,15 @@ const Dashboard = () => {
         case 'pay_success':
           return (
             <div className="space-y-3">
-              {[
-                { id: 'TXN-9901', product: 'Resin Table', amount: '₹8,500', date: '21 Apr' },
-                { id: 'TXN-9902', product: 'Keychain Set', amount: '₹450', date: '20 Apr' },
-              ].map(txn => (
-                <div key={txn.id} className="flex items-center justify-between p-3 rounded-xl bg-green-400/5 border border-green-400/10">
+              {paySuccessOrders.length === 0 ? (
+                <p className="text-slate-400 text-center py-4">No completed payments yet.</p>
+              ) : paySuccessOrders.map(txn => (
+                <div key={txn._id} className="flex items-center justify-between p-3 rounded-xl bg-green-400/5 border border-green-400/10">
                   <div>
-                    <p className="text-white text-sm font-bold">{txn.product}</p>
-                    <p className="text-[10px] text-slate-500">{txn.id} • {txn.date}</p>
+                    <p className="text-white text-sm font-bold">{txn.items[0]?.productId?.title || 'Multiple Items'}</p>
+                    <p className="text-[10px] text-slate-500">#{txn._id.slice(-6).toUpperCase()} • {new Date(txn.createdAt).toLocaleDateString()}</p>
                   </div>
-                  <span className="text-green-400 font-bold">{txn.amount}</span>
+                  <span className="text-green-400 font-bold">₹{txn.totalAmount}</span>
                 </div>
               ))}
             </div>
@@ -362,16 +397,15 @@ const Dashboard = () => {
         case 'pay_pending':
           return (
             <div className="space-y-3">
-              {[
-                { product: 'Portrait Sketch', amount: '₹800', status: 'Verifying' },
-                { product: 'Wooden Coasters', amount: '₹400', status: 'Payment Initiated' },
-              ].map(p => (
-                <div key={p.product} className="flex items-center justify-between p-3 rounded-xl bg-red-400/5 border border-red-400/10">
+              {payPendingOrders.length === 0 ? (
+                <p className="text-slate-400 text-center py-4">No pending payments.</p>
+              ) : payPendingOrders.map(p => (
+                <div key={p._id} className="flex items-center justify-between p-3 rounded-xl bg-red-400/5 border border-red-400/10">
                   <div>
-                    <p className="text-white text-sm font-bold">{p.product}</p>
-                    <p className="text-[10px] text-slate-500">{p.status}</p>
+                    <p className="text-white text-sm font-bold">{p.items[0]?.productId?.title || 'Multiple Items'}</p>
+                    <p className="text-[10px] text-slate-500 uppercase">{p.status}</p>
                   </div>
-                  <span className="text-red-400 font-bold">{p.amount}</span>
+                  <span className="text-red-400 font-bold">₹{p.totalAmount}</span>
                 </div>
               ))}
             </div>
@@ -379,17 +413,41 @@ const Dashboard = () => {
         case 'demands':
           return (
             <div className="space-y-4">
-              {[
-                { buyer: 'Amit S.', req: 'Ocean theme resin clock, 12 inch', budget: '₹1,500' },
-                { buyer: 'Neha K.', req: 'Handpainted terracotta pots (3)', budget: '₹900' },
-              ].map(d => (
-                <div key={d.buyer} className="glass-card p-4 rounded-2xl border border-white/5">
+              {demands.length === 0 ? (
+                <p className="text-slate-400 text-center py-4">No active demands right now.</p>
+              ) : demands.map(d => (
+                <div key={d._id} className="glass-card p-4 rounded-2xl border border-white/5">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-white font-bold">{d.buyer}</span>
-                    <span className="text-accent2 font-bold">{d.budget}</span>
+                    <span className="text-white font-bold">{d.userId?.firstName} {d.userId?.lastName}</span>
+                    <span className="text-xs bg-accent2/20 text-accent2 px-2 py-0.5 rounded-full font-bold uppercase">{d.category || 'General'}</span>
                   </div>
-                  <p className="text-xs text-slate-400 leading-relaxed">{d.req}</p>
-                  <button className="w-full mt-3 py-2 rounded-xl bg-white/5 text-xs font-bold text-white hover:bg-white/10 transition-colors">Submit Offer</button>
+                  <h4 className="text-sm text-white font-bold mb-1">{d.productName}</h4>
+                  <p className="text-xs text-slate-400 leading-relaxed mb-3">{d.description}</p>
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const price = e.target.price.value;
+                      if (!price) return;
+                      const toastId = toast.loading('Submitting offer...');
+                      try {
+                        await client.post(`/demands/${d._id}/accept`, { price: Number(price) });
+                        toast.success('Offer submitted and added to buyer cart!', { id: toastId });
+                        fetchDashboardData();
+                      } catch (err) {
+                        toast.error(err.response?.data?.error?.message || 'Failed to submit offer', { id: toastId });
+                      }
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <input 
+                      name="price"
+                      type="number" 
+                      placeholder="Your Price (₹)" 
+                      required
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-accent2 transition-colors" 
+                    />
+                    <button type="submit" className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent2 to-blue-500 text-xs font-bold text-white hover:opacity-90 transition-opacity">Submit Offer</button>
+                  </form>
                 </div>
               ))}
             </div>
@@ -434,21 +492,51 @@ const Dashboard = () => {
             </div>
           );
         case 'customs':
+          const customs = demands.filter(d => d.images && d.images.length > 0);
           return (
             <div className="space-y-4">
-              {[
-                { id: 'CUST-01', product: 'Resin Table', instruction: 'Use more golden flakes in the middle', image: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809' },
-                { id: 'CUST-02', product: 'Wall Art', instruction: 'Background should be matte black', image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f' },
-              ].map(c => (
-                <div key={c.id} className="glass-card p-4 rounded-2xl border border-white/5">
-                  <div className="flex gap-4">
-                    <img src={c.image} alt="ref" className="w-20 h-20 rounded-xl object-cover border border-white/10" />
+              {customs.length === 0 ? (
+                <p className="text-slate-400 text-center py-4">No customization requests with images.</p>
+              ) : customs.map(c => (
+                <div key={c._id} className="glass-card p-4 rounded-2xl border border-white/5">
+                  <div className="flex gap-4 items-start mb-3">
+                    <img 
+                      src={productService.getImageUrl(c.images[0])} 
+                      alt="Custom Request" 
+                      className="w-16 h-16 rounded-xl object-cover border border-white/10 cursor-zoom-in hover:opacity-80 transition-opacity"
+                      onClick={() => setFullViewImage(productService.getImageUrl(c.images[0]))}
+                    />
                     <div className="flex-1">
-                      <h4 className="text-white font-bold text-sm mb-1">{c.product}</h4>
-                      <p className="text-[10px] text-slate-500 uppercase font-bold mb-2">Request #{c.id}</p>
-                      <p className="text-xs text-slate-400 italic">"{c.instruction}"</p>
+                      <h4 className="text-white font-bold text-sm mb-1">{c.productName}</h4>
+                      <p className="text-[10px] text-slate-500 uppercase font-bold mb-2">Request #{c._id.slice(-6).toUpperCase()}</p>
+                      <p className="text-xs text-slate-400 italic">"{c.description}"</p>
                     </div>
                   </div>
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const price = e.target.price.value;
+                      if (!price) return;
+                      const toastId = toast.loading('Submitting offer...');
+                      try {
+                        await client.post(`/demands/${c._id}/accept`, { price: Number(price) });
+                        toast.success('Offer submitted and added to buyer cart!', { id: toastId });
+                        fetchDashboardData();
+                      } catch (err) {
+                        toast.error(err.response?.data?.error?.message || 'Failed to submit offer', { id: toastId });
+                      }
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <input 
+                      name="price"
+                      type="number" 
+                      placeholder="Your Price (₹)" 
+                      required
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-400 transition-colors" 
+                    />
+                    <button type="submit" className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-xs font-bold text-white hover:opacity-90 transition-opacity">Submit Offer</button>
+                  </form>
                 </div>
               ))}
             </div>
@@ -582,23 +670,9 @@ const Dashboard = () => {
             <button className="text-sm text-accent2 hover:underline font-bold" onClick={() => setActiveModal('reviews')}>View All</button>
           </div>
           
-          <div className="glass-card rounded-3xl p-6 space-y-6 border border-white/5">
-            {[1, 2].map((review, idx) => (
-              <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-                <div className="w-12 h-12 rounded-full bg-accent1/10 flex items-center justify-center shrink-0">
-                  <Users className="w-6 h-6 text-accent1" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-bold text-white">Rahul Verma</span>
-                    <div className="flex gap-0.5">
-                      {[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 fill-accent2 text-accent2" />)}
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-400">"The Nebula Clock is absolutely stunning. Perfect finishing and packaging was very secure. Highly recommended creator!"</p>
-                </div>
-              </div>
-            ))}
+          <div className="glass-card rounded-3xl p-6 border border-white/5 flex flex-col items-center justify-center text-center min-h-[150px]">
+            <Star className="w-8 h-8 text-slate-500 mb-2 opacity-50" />
+            <p className="text-slate-400 text-sm">No reviews yet. Deliver great products to get your first review!</p>
           </div>
         </div>
 
@@ -625,6 +699,39 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Full Screen Image View */}
+      <AnimatePresence>
+        {fullViewImage && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 md:p-12 cursor-zoom-out overflow-hidden"
+            onClick={() => setFullViewImage(null)}
+          >
+            <motion.button 
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              className="absolute top-6 right-6 md:top-8 md:right-8 w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors z-50 backdrop-blur-md"
+              onClick={() => setFullViewImage(null)}
+            >
+              <X className="w-6 h-6" />
+            </motion.button>
+            <motion.img 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              src={fullViewImage} 
+              alt="Full view" 
+              className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

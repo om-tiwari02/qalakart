@@ -8,6 +8,7 @@ import useKartStore from '../../store/kartStore';
 import useAuthStore from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { productService } from '../../services/productService';
+import { client } from '../../lib/api/client';
 
 const Browse = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -21,6 +22,16 @@ const Browse = () => {
   const [sortBy, setSortBy] = useState('none');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [customizeInstruction, setCustomizeInstruction] = useState('');
+  const [customizeImageFile, setCustomizeImageFile] = useState(null);
+  const [customizeImagePreview, setCustomizeImagePreview] = useState(null);
+
+  const [demandInstruction, setDemandInstruction] = useState('');
+  const [demandImageFile, setDemandImageFile] = useState(null);
+  const [demandImagePreview, setDemandImagePreview] = useState(null);
+  const [demandBudget, setDemandBudget] = useState('');
+  const [demandTimeline, setDemandTimeline] = useState('');
   
   const { isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -76,16 +87,89 @@ const Browse = () => {
     setMomentPreserveType('');
   };
 
-  const handleCustomizeSubmit = (e) => {
-    e.preventDefault();
-    toast.success('Customization request sent to the creator!');
-    setSelectedProduct(null);
+  const handleCustomizeImage = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setCustomizeImageFile(file);
+      setCustomizeImagePreview(URL.createObjectURL(file));
+    }
   };
 
-  const handleDemandSubmit = (e) => {
+  const handleCustomizeSubmit = async (e) => {
     e.preventDefault();
-    toast.success('Demand placed!');
-    setIsDemandModalOpen(false);
+    if (!isAuthenticated) {
+      toast.error('Please login first!');
+      return;
+    }
+    const toastId = toast.loading('Sending customization request...');
+    try {
+      let imageUrl = null;
+      if (customizeImageFile) {
+        const formData = new FormData();
+        formData.append('images', customizeImageFile);
+        const uploadRes = await client.post('/upload', formData);
+        imageUrl = uploadRes.data.data.imageUrls[0];
+      }
+      
+      await client.post('/demands', {
+        productName: `Custom: ${selectedProduct.name}`,
+        description: customizeInstruction,
+        category: 'Customization',
+        images: imageUrl ? [imageUrl] : [],
+        creatorId: selectedProduct.userId
+      });
+
+      toast.success('Customization request sent to the creator!', { id: toastId });
+      setSelectedProduct(null);
+      setCustomizeInstruction('');
+      setCustomizeImageFile(null);
+      setCustomizeImagePreview(null);
+    } catch (err) {
+      toast.error('Failed to send request', { id: toastId });
+    }
+  };
+
+  const handleDemandImage = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setDemandImageFile(file);
+      setDemandImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleDemandSubmit = async (e) => {
+    e.preventDefault();
+    if (!isAuthenticated) {
+      toast.error('Please login first!');
+      return;
+    }
+    const toastId = toast.loading('Placing demand...');
+    try {
+      let imageUrl = null;
+      if (demandImageFile) {
+        const formData = new FormData();
+        formData.append('images', demandImageFile);
+        const uploadRes = await client.post('/upload', formData);
+        imageUrl = uploadRes.data.data.imageUrls[0];
+      }
+
+      await client.post('/demands', {
+        productName: 'Custom Demand Request',
+        description: `${demandInstruction}\nTimeline: ${demandTimeline}\nBudget: ${demandBudget}`,
+        category: 'General Demand',
+        images: imageUrl ? [imageUrl] : []
+      });
+
+      toast.success('Demand placed successfully!', { id: toastId });
+      setIsDemandModalOpen(false);
+      setDemandInstruction('');
+      setDemandTimeline('');
+      setDemandBudget('');
+      setDemandImageFile(null);
+      setDemandImagePreview(null);
+    } catch (err) {
+      toast.error('Failed to place demand', { id: toastId });
+    }
   };
 
   const filteredProducts = products.filter(product => 
@@ -434,18 +518,33 @@ const Browse = () => {
               <form onSubmit={handleCustomizeSubmit} className="space-y-6">
                 <div>
                   <span className="block text-sm font-medium text-slate-300 mb-2">Reference Picture</span>
-                  <label className="border-2 border-dashed border-white/20 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:bg-white/5 hover:border-accent1/50 transition-colors cursor-pointer w-full">
-                    <input type="file" accept="image/*" className="hidden" />
-                    <Upload className="w-8 h-8 text-slate-400 mb-3" />
-                    <p className="text-sm text-white font-medium">Click to upload an image</p>
-                    <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5MB</p>
-                  </label>
+                  {customizeImagePreview ? (
+                    <div className="relative border-2 border-dashed border-white/20 rounded-xl overflow-hidden h-32 flex items-center justify-center bg-white/5">
+                      <img src={customizeImagePreview} alt="Preview" className="h-full w-full object-cover" />
+                      <button 
+                        type="button"
+                        onClick={() => { setCustomizeImagePreview(null); setCustomizeImageFile(null); }}
+                        className="absolute top-2 right-2 bg-black/60 p-1 rounded-full text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="border-2 border-dashed border-white/20 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:bg-white/5 hover:border-accent1/50 transition-colors cursor-pointer w-full">
+                      <input type="file" accept="image/*" className="hidden" onChange={handleCustomizeImage} />
+                      <Upload className="w-8 h-8 text-slate-400 mb-3" />
+                      <p className="text-sm text-white font-medium">Click to upload an image</p>
+                      <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5MB</p>
+                    </label>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">Instructions for Creator</label>
                   <textarea
                     rows="4"
+                    value={customizeInstruction}
+                    onChange={(e) => setCustomizeInstruction(e.target.value)}
                     className="w-full bg-surface/50 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-accent1 transition-colors resize-none"
                     placeholder="E.g., I want the text on the keychain to be in cursive and colored gold..."
                     required
@@ -503,18 +602,33 @@ const Browse = () => {
               <form onSubmit={handleDemandSubmit} className="space-y-5">
                 <div>
                   <span className="block text-sm font-medium text-slate-300 mb-2">Reference Picture</span>
-                  <label className="border-2 border-dashed border-white/20 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-white/5 hover:border-accent1/50 transition-colors cursor-pointer w-full">
-                    <input type="file" accept="image/*" className="hidden" required />
-                    <Upload className="w-6 h-6 text-slate-400 mb-2" />
-                    <p className="text-sm text-white font-medium">Click to upload an image</p>
-                    <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5MB</p>
-                  </label>
+                  {demandImagePreview ? (
+                    <div className="relative border-2 border-dashed border-white/20 rounded-xl overflow-hidden h-32 flex items-center justify-center bg-white/5">
+                      <img src={demandImagePreview} alt="Preview" className="h-full w-full object-cover" />
+                      <button 
+                        type="button"
+                        onClick={() => { setDemandImagePreview(null); setDemandImageFile(null); }}
+                        className="absolute top-2 right-2 bg-black/60 p-1 rounded-full text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="border-2 border-dashed border-white/20 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-white/5 hover:border-accent1/50 transition-colors cursor-pointer w-full">
+                      <input type="file" accept="image/*" className="hidden" onChange={handleDemandImage} />
+                      <Upload className="w-6 h-6 text-slate-400 mb-2" />
+                      <p className="text-sm text-white font-medium">Click to upload an image</p>
+                      <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5MB</p>
+                    </label>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2">Instructions</label>
                   <textarea
                     rows="3"
+                    value={demandInstruction}
+                    onChange={(e) => setDemandInstruction(e.target.value)}
                     className="w-full bg-surface/50 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-accent1 transition-colors resize-none"
                     placeholder="Describe what you need created in detail..."
                     required
@@ -526,6 +640,8 @@ const Browse = () => {
                     <label className="block text-sm font-medium text-slate-300 mb-2">Timeline</label>
                     <input
                       type="text"
+                      value={demandTimeline}
+                      onChange={(e) => setDemandTimeline(e.target.value)}
                       className="w-full bg-surface/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-accent1 transition-colors"
                       placeholder="e.g. 1 week"
                       required
@@ -535,6 +651,8 @@ const Browse = () => {
                     <label className="block text-sm font-medium text-slate-300 mb-2">Budget (Optional)</label>
                     <input
                       type="text"
+                      value={demandBudget}
+                      onChange={(e) => setDemandBudget(e.target.value)}
                       className="w-full bg-surface/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-accent1 transition-colors"
                       placeholder="e.g. ₹500"
                     />
