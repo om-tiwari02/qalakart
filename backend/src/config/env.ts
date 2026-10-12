@@ -18,6 +18,21 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().min(1),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  N8N_OTP_WEBHOOK_URL: z.union([z.string().url(), z.literal("")]).optional(),
+  N8N_OTP_WEBHOOK_SECRET: z.string().optional(),
+
+  // SMTP Email Settings
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional().default(587),
+  SMTP_SECURE: z
+    .preprocess((val) => {
+      if (typeof val === "string") return val.toLowerCase() === "true" || val === "1";
+      return Boolean(val);
+    }, z.boolean())
+    .default(false),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
 
   ENCRYPTION_KEY: z.union([z.string().length(64), z.literal(""), z.undefined()]),
   SENTRY_DSN: z.string().optional(),
@@ -36,4 +51,3 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
-

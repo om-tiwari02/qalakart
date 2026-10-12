@@ -15,12 +15,17 @@ const schema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters")
 });
 
+const otpSchema = z.object({
+  otp: z.string().regex(/^\d{6}$/, "Enter the six-digit code")
+});
+
 const AuthModal = () => {
   const { isAuthModalOpen, closeAuthModal } = useUIStore();
-  const { login, register: registerUser, googleLogin, isAuthenticated } = useAuthStore();
+  const { login, register: registerUser, verifyLoginOtp, googleLogin, isAuthenticated } = useAuthStore();
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [otpEmail, setOtpEmail] = useState(null);
   const googleButtonRef = useRef(null);
   const googleInitialized = useRef(false);
   const navigate = useNavigate();
@@ -28,6 +33,11 @@ const AuthModal = () => {
   const { register: registerField, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema)
   });
+  const {
+    register: registerOtpField,
+    handleSubmit: handleOtpSubmit,
+    formState: { errors: otpErrors, isSubmitting: isOtpSubmitting }
+  } = useForm({ resolver: zodResolver(otpSchema) });
 
   useEffect(() => {
     if (isAuthenticated && isAuthModalOpen) {
@@ -40,7 +50,10 @@ const AuthModal = () => {
     setError(null);
     setIsGoogleLoading(true);
     try {
-      await googleLogin(credential);
+      const result = await googleLogin(credential);
+      if (result.otpRequired) {
+        setOtpEmail(result.email);
+      }
     } catch (err) {
       console.error('Google auth failed:', err);
       if (err.response) {
@@ -100,10 +113,11 @@ const AuthModal = () => {
   const onSubmit = async (data) => {
     setError(null);
     try {
-      if (isLogin) {
-        await login(data);
-      } else {
-        await registerUser({ ...data, role: 'buyer' });
+      const result = isLogin
+        ? await login(data)
+        : await registerUser({ ...data, role: 'buyer' });
+      if (result.otpRequired) {
+        setOtpEmail(result.email);
       }
     } catch (err) {
       console.error('Auth operation failed:', err);
@@ -118,6 +132,16 @@ const AuthModal = () => {
       } else {
         setError("An unexpected error occurred. Please try again.");
       }
+    }
+  };
+
+  const onVerifyOtp = async ({ otp }) => {
+    if (!otpEmail) return;
+    setError(null);
+    try {
+      await verifyLoginOtp({ email: otpEmail, otp });
+    } catch (err) {
+      setError(err.response?.data?.error?.message || "Could not verify the code. Please try again.");
     }
   };
 
@@ -149,11 +173,35 @@ const AuthModal = () => {
               <Package className="w-8 h-8 text-accent1" />
             </div>
           </div>
-          <h2 className="text-3xl font-outfit font-bold text-white text-center mb-2">{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+          <h2 className="text-3xl font-outfit font-bold text-white text-center mb-2">{otpEmail ? 'Verify your email' : (isLogin ? 'Welcome Back' : 'Create Account')}</h2>
           <p className="text-slate-400 text-center mb-8 text-sm">
-            {isLogin ? "Log in to QalaKart" : "Join the QalaKart community"}
+            {otpEmail ? `Enter the code sent to ${otpEmail}` : (isLogin ? "Log in to QalaKart" : "Join the QalaKart community")}
           </p>
-          
+
+          {otpEmail ? (
+            <form className="space-y-4" onSubmit={handleOtpSubmit(onVerifyOtp)}>
+              {error && <div className="text-red-400 text-sm mb-4 text-center">{error}</div>}
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-1">Verification code</label>
+                <input
+                  {...registerOtpField('otp')}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="123456"
+                  className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-3 text-center text-white tracking-[0.4em] focus:outline-none focus:border-accent1 transition-colors"
+                />
+                {otpErrors.otp && <p className="text-red-400 text-xs mt-1">{otpErrors.otp.message}</p>}
+              </div>
+              <button type="submit" disabled={isOtpSubmitting} className="w-full btn-primary mt-6 flex justify-center items-center gap-2 py-4">
+                {isOtpSubmitting ? 'Verifying...' : 'Verify and Log In'}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <button type="button" onClick={() => { setOtpEmail(null); setError(null); }} className="w-full text-accent1 text-sm hover:underline">
+                Use a different email
+              </button>
+            </form>
+          ) : (
           <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
             {error && <div className="text-red-400 text-sm mb-4 text-center">{error}</div>}
             
@@ -215,6 +263,7 @@ const AuthModal = () => {
               </button>
             </div>
           </form>
+          )}
         </motion.div>
       </motion.div>
     </div>

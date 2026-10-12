@@ -1,12 +1,16 @@
 import bcrypt from "bcryptjs";
+import { randomInt } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import mongoose from "mongoose";
 
 import { env } from "../../config/env.js";
 import { User, type UserRole } from "../users/user.model.js";
 import { signAccess, signRefresh } from "../../utils/jwt.js";
+import { sendOtpEmail } from "../../services/email.service.js";
 
 const REFRESH_COOKIE_NAME = "refreshToken";
+const LOGIN_OTP_TTL_MS = 10 * 60 * 1000;
+const MAX_LOGIN_OTP_ATTEMPTS = 5;
 const devStoreDir = new URL("../../../.data/", import.meta.url);
 const devAuthStore = new URL("../../../.data/auth-users.json", import.meta.url);
 
@@ -18,6 +22,11 @@ type MemoryUser = {
   refreshToken: {
     tokenHash: string;
     createdAt: Date;
+  } | null;
+  loginOtp?: {
+    codeHash: string;
+    expiresAt: Date;
+    attempts: number;
   } | null;
 };
 
@@ -50,6 +59,9 @@ async function loadDevUsers() {
         ...user,
         refreshToken: user.refreshToken
           ? { ...user.refreshToken, createdAt: new Date(user.refreshToken.createdAt) }
+          : null,
+        loginOtp: user.loginOtp
+          ? { ...user.loginOtp, expiresAt: new Date(user.loginOtp.expiresAt) }
           : null
       });
     }
@@ -68,6 +80,24 @@ async function saveDevUsers() {
 function hashRefreshToken(token: string) {
   // bcrypt gives us an adaptive hash; we also include a fast breach check using sha256.
   return bcrypt.hash(token, 10);
+}
+
+function authError(message: string, statusCode: number, code: string) {
+  const err = new Error(message) as Error & { statusCode?: number; code?: string };
+  err.statusCode = statusCode;
+  err.code = code;
+  return err;
+}
+
+async function sendLoginOtp(email: string, otp: string) {
+  try {
+    await sendOtpEmail(email, otp, LOGIN_OTP_TTL_MS / 60_000);
+  } catch (err) {
+    if ((err as { code?: string }).code === "OTP_DELIVERY_FAILED") {
+      throw err;
+    }
+    throw authError("OTP delivery is temporarily unavailable", 503, "OTP_DELIVERY_FAILED");
+  }
 }
 
 async function verifyGoogleCredential(credential: string) {
@@ -213,15 +243,7 @@ export async function login(input: { email: string; password: string }) {
       throw err;
     }
 
-    const accessToken = signAccess({ sub: user._id, email: user.email, role: user.role });
-    const refreshToken = signRefresh({ sub: user._id });
-    user.refreshToken = {
-      tokenHash: await hashRefreshToken(refreshToken),
-      createdAt: new Date()
-    };
-    await saveDevUsers();
-
-    return { user, accessToken, refreshToken };
+    return requestLoginOtp(user.email);
   }
 
   const user = await User.findOne({ email: input.email }).exec();
@@ -240,13 +262,87 @@ export async function login(input: { email: string; password: string }) {
     throw err;
   }
 
+  return requestLoginOtp(user.email);
+}
+
+export async function requestLoginOtp(email: string) {
+  if (canUseDevAuthFallback()) {
+    await loadDevUsers();
+    const user = Array.from(memoryUsers.values()).find((candidate) => candidate.email === email);
+    if (!user) {
+      throw authError("Unable to start verification", 401, "UNAUTHORIZED");
+    }
+    const otp = randomInt(100_000, 1_000_000).toString();
+    user.loginOtp = {
+      codeHash: await bcrypt.hash(otp, 12),
+      expiresAt: new Date(Date.now() + LOGIN_OTP_TTL_MS),
+      attempts: 0
+    };
+    await saveDevUsers();
+    await sendLoginOtp(user.email, otp);
+    return { email: user.email, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
+  }
+
+  const user = await User.findOne({ email }).exec();
+  if (!user) {
+    throw authError("Unable to start verification", 401, "UNAUTHORIZED");
+  }
+  const otp = randomInt(100_000, 1_000_000).toString();
+  user.loginOtp = {
+    codeHash: await bcrypt.hash(otp, 12),
+    expiresAt: new Date(Date.now() + LOGIN_OTP_TTL_MS),
+    attempts: 0
+  };
+  await user.save();
+  await sendLoginOtp(user.email, otp);
+  return { email: user.email, expiresInSeconds: LOGIN_OTP_TTL_MS / 1000 };
+}
+
+export async function verifyLoginOtp(input: { email: string; otp: string }) {
+  if (canUseDevAuthFallback()) {
+    await loadDevUsers();
+    const user = Array.from(memoryUsers.values()).find((candidate) => candidate.email === input.email);
+    if (!user?.loginOtp || user.loginOtp.expiresAt <= new Date()) {
+      throw authError("The verification code has expired. Log in again to get a new code.", 401, "OTP_EXPIRED");
+    }
+    if (user.loginOtp.attempts >= MAX_LOGIN_OTP_ATTEMPTS) {
+      user.loginOtp = null;
+      await saveDevUsers();
+      throw authError("Too many invalid codes. Log in again to get a new code.", 429, "OTP_ATTEMPTS_EXCEEDED");
+    }
+    if (!(await bcrypt.compare(input.otp, user.loginOtp.codeHash))) {
+      user.loginOtp.attempts += 1;
+      await saveDevUsers();
+      throw authError("Invalid verification code", 401, "OTP_INVALID");
+    }
+
+    user.loginOtp = null;
+    const session = createDevSession(user.email, user.role);
+    user.refreshToken = { tokenHash: await hashRefreshToken(session.refreshToken), createdAt: new Date() };
+    await saveDevUsers();
+    return session;
+  }
+
+  const user = await User.findOne({ email: input.email }).exec();
+  if (!user?.loginOtp || user.loginOtp.expiresAt <= new Date()) {
+    throw authError("The verification code has expired. Log in again to get a new code.", 401, "OTP_EXPIRED");
+  }
+  if (user.loginOtp.attempts >= MAX_LOGIN_OTP_ATTEMPTS) {
+    user.loginOtp = null;
+    await user.save();
+    throw authError("Too many invalid codes. Log in again to get a new code.", 429, "OTP_ATTEMPTS_EXCEEDED");
+  }
+  if (!(await bcrypt.compare(input.otp, user.loginOtp.codeHash))) {
+    user.loginOtp.attempts += 1;
+    await user.save();
+    throw authError("Invalid verification code", 401, "OTP_INVALID");
+  }
+
+  user.loginOtp = null;
   const accessToken = signAccess({ sub: String(user._id), email: user.email, role: user.role });
   const refreshToken = signRefresh({ sub: String(user._id) });
-  const refreshHash = await hashRefreshToken(refreshToken);
-
-  user.refreshToken = { tokenHash: refreshHash, createdAt: new Date() };
+  user.refreshToken = { tokenHash: await hashRefreshToken(refreshToken), createdAt: new Date() };
   await user.save();
-
   return { user, accessToken, refreshToken };
 }
 

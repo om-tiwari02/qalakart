@@ -28,20 +28,23 @@ const useAuthStore = create((set) => ({
 
   login: async (credentials) => {
     const { data } = await client.post('/auth/login', credentials);
+    return data.data;
+  },
+
+  verifyLoginOtp: async ({ email, otp }) => {
+    const { data } = await client.post('/auth/login/verify-otp', { email, otp });
     tokenStore.set(data.data.accessToken);
     set({ user: data.data.user, role: data.data.user.role, isAuthenticated: true });
   },
 
   register: async (credentials) => {
     const { data } = await client.post('/auth/register', credentials);
-    tokenStore.set(data.data.accessToken);
-    set({ user: data.data.user, role: data.data.user.role, isAuthenticated: true });
+    return data.data;
   },
 
   googleLogin: async (credential) => {
     const { data } = await client.post('/auth/google', { credential });
-    tokenStore.set(data.data.accessToken);
-    set({ user: data.data.user, role: data.data.user.role, isAuthenticated: true });
+    return data.data;
   },
 
   logout: async () => {

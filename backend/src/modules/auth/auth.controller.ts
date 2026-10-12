@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 
 import { env } from "../../config/env.js";
 import { verifyRefresh } from "../../utils/jwt.js";
-import { cookies, googleLogin, login, logout, refreshSession, register } from "./auth.service.js";
+import { cookies, googleLogin, login, logout, refreshSession, register, requestLoginOtp, verifyLoginOtp } from "./auth.service.js";
 
 function serializeUser(user: {
   _id: unknown;
@@ -33,19 +33,32 @@ function setRefreshCookie(res: Response, token: string) {
 }
 
 export async function registerController(req: Request, res: Response) {
-  const { user, accessToken, refreshToken } = await register(req.body);
-  setRefreshCookie(res, refreshToken);
-  return res.status(201).json({
+  const { user } = await register(req.body);
+  const result = await requestLoginOtp(user.email);
+  return res.status(202).json({
     success: true,
     data: {
-      accessToken,
-      user: serializeUser(user)
+      otpRequired: true,
+      email: result.email,
+      expiresInSeconds: result.expiresInSeconds
     }
   });
 }
 
 export async function loginController(req: Request, res: Response) {
-  const { user, accessToken, refreshToken } = await login(req.body);
+  const result = await login(req.body);
+  return res.status(202).json({
+    success: true,
+    data: {
+      otpRequired: true,
+      email: result.email,
+      expiresInSeconds: result.expiresInSeconds
+    }
+  });
+}
+
+export async function verifyLoginOtpController(req: Request, res: Response) {
+  const { user, accessToken, refreshToken } = await verifyLoginOtp(req.body);
   setRefreshCookie(res, refreshToken);
   return res.status(200).json({
     success: true,
@@ -57,13 +70,14 @@ export async function loginController(req: Request, res: Response) {
 }
 
 export async function googleLoginController(req: Request, res: Response) {
-  const { user, accessToken, refreshToken } = await googleLogin(req.body.credential);
-  setRefreshCookie(res, refreshToken);
-  return res.status(200).json({
+  const { user } = await googleLogin(req.body.credential);
+  const result = await requestLoginOtp(user.email);
+  return res.status(202).json({
     success: true,
     data: {
-      accessToken,
-      user: { id: String(user._id), email: user.email, role: user.role }
+      otpRequired: true,
+      email: result.email,
+      expiresInSeconds: result.expiresInSeconds
     }
   });
 }

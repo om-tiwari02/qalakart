@@ -10,6 +10,15 @@ const refreshTokenSchema = new Schema(
   { _id: false }
 );
 
+const loginOtpSchema = new Schema(
+  {
+    codeHash: { type: String, required: true },
+    expiresAt: { type: Date, required: true },
+    attempts: { type: Number, required: true, default: 0 }
+  },
+  { _id: false }
+);
+
 const userSchema = new Schema(
   {
     email: { type: String, required: true, unique: true, index: true },
@@ -19,7 +28,8 @@ const userSchema = new Schema(
     profileImage: { type: String, required: false },
     bio: { type: String, required: false },
     role: { type: String, required: true, enum: ["buyer", "creator", "admin"], default: "buyer" },
-    refreshToken: { type: refreshTokenSchema, required: false, default: null }
+    refreshToken: { type: refreshTokenSchema, required: false, default: null },
+    loginOtp: { type: loginOtpSchema, required: false, default: null }
   },
   { timestamps: true }
 );
