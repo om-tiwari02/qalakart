@@ -11,7 +11,10 @@ export async function getCart(userId: string) {
 
 export async function addToCart(userId: string, productId: string, quantity: number) {
   const cart = await getCart(userId);
-  const itemIndex = cart.items.findIndex((item) => String(item.productId) === productId);
+  const itemIndex = cart.items.findIndex((item: any) => {
+    const idStr = item.productId?._id ? item.productId._id.toString() : item.productId.toString();
+    return idStr === productId;
+  });
 
   if (itemIndex > -1) {
     cart.items[itemIndex].quantity += quantity;
@@ -24,7 +27,10 @@ export async function addToCart(userId: string, productId: string, quantity: num
 
 export async function removeFromCart(userId: string, productId: string) {
   const cart = await getCart(userId);
-  cart.items = cart.items.filter((item) => String(item.productId) !== productId);
+  cart.items = cart.items.filter((item: any) => {
+    const idStr = item.productId?._id ? item.productId._id.toString() : item.productId.toString();
+    return idStr !== productId;
+  });
   return cart.save();
 }
 

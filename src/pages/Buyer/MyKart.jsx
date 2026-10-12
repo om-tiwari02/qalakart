@@ -205,6 +205,7 @@ const CheckoutModal = ({ cart, total, onClose, onComplete }) => {
   const [paymentMethod, setPaymentMethod] = useState('online');
   const [useQalaCoins, setUseQalaCoins] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
+  const [address, setAddress] = useState('');
 
   // Business Logic
   const hasExpensiveItem = cart.some(i => i.price >= 439);
@@ -214,15 +215,20 @@ const CheckoutModal = ({ cart, total, onClose, onComplete }) => {
   const finalTotal = total - discount;
   const coinsReward = total * 0.10;
 
-  const completeCheckout = () => {
+  const completeCheckout = (pmethod, pstatus) => {
     if (useQalaCoins) deductCoins(100);
     addCoins(coinsReward);
-    onComplete(Math.round(coinsReward));
+    onComplete(coinsReward, address || 'Default Address, City', pmethod, pstatus);
   };
 
   const handleConfirm = async () => {
+    if (!address) {
+      toast.error("Please enter a shipping address");
+      return;
+    }
+    
     if (paymentMethod === 'cod') {
-      completeCheckout();
+      completeCheckout('cod', 'pending');
       return;
     }
 
@@ -267,7 +273,7 @@ const CheckoutModal = ({ cart, total, onClose, onComplete }) => {
           try {
             await client.post('/payments/razorpay/verify', response);
             toast.success('Payment verified');
-            completeCheckout();
+            completeCheckout('online', 'completed');
           } catch (err) {
             toast.error(err.response?.data?.error?.message || 'Payment verification failed');
           } finally {
@@ -324,6 +330,18 @@ const CheckoutModal = ({ cart, total, onClose, onComplete }) => {
               <span>Total Payable</span>
               <span className="neon-text">₹{Math.round(finalTotal)}</span>
             </div>
+          </div>
+
+          {/* Shipping Address Input */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Shipping Address</label>
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Enter your full shipping address..."
+              className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-accent1 transition-colors resize-none placeholder:text-slate-600"
+              rows="2"
+            />
           </div>
 
           {/* Qala Coin Option */}
@@ -407,7 +425,7 @@ const MyOrders = () => {
   const [reviewOrder, setReviewOrder] = useState(null);
   const [orderTab, setOrderTab] = useState('upcoming');
 
-  const orders = allOrders.filter((o) => o.id !== 'ORD-1987' && o.id !== 'ORD-1654');
+  const orders = allOrders || [];
   const upcoming = orders.filter((o) => o.status === 'upcoming');
   const previous = orders.filter((o) => o.status === 'previous');
   const shown = orderTab === 'upcoming' ? upcoming : previous;
@@ -583,18 +601,22 @@ const CartAndWishlist = () => {
     setShowCheckout(true);
   };
 
-  const completeOrder = (earnedCoins) => {
-    placeOrder(cart);
-    setShowCheckout(false);
-    toast.success(
-      (t) => (
-        <span className="flex flex-col gap-1">
-          <span className="font-bold">Order placed! 🎉</span>
-          <span className="text-xs text-slate-500">You earned <span className="text-accent1 font-bold">{earnedCoins} QalaCoins</span>!</span>
-        </span>
-      ),
-      { duration: 5000 }
-    );
+  const completeOrder = async (earnedCoins, address, paymentMethod, paymentStatus) => {
+    try {
+      await placeOrder(address, paymentMethod, paymentStatus);
+      setShowCheckout(false);
+      toast.success(
+        (t) => (
+          <span className="flex flex-col gap-1">
+            <span className="font-bold">Order placed! 🎉</span>
+            <span className="text-xs text-slate-500">You earned <span className="text-accent1 font-bold">{Math.round(earnedCoins)} QalaCoins</span>!</span>
+          </span>
+        ),
+        { duration: 5000 }
+      );
+    } catch (e) {
+      toast.error('Failed to place order');
+    }
   };
 
   return (
@@ -738,7 +760,7 @@ const CartAndWishlist = () => {
             cart={cart} 
             total={cartTotal} 
             onClose={() => setShowCheckout(false)} 
-            onComplete={(coins) => completeOrder(coins)} 
+            onComplete={(coins, addr, pm, ps) => completeOrder(coins, addr, pm, ps)} 
           />
         )}
 
@@ -820,8 +842,13 @@ const CartAndWishlist = () => {
 const MyKart = () => {
   const [mainTab, setMainTab] = useState('orders');
   const navigate = useNavigate();
-  const { cart, orders, wishlist } = useKartStore();
+  const { cart, orders, wishlist, fetchCart, fetchOrders } = useKartStore();
   const upcomingCount = orders.filter((o) => o.status === 'upcoming').length;
+
+  React.useEffect(() => {
+    fetchCart();
+    fetchOrders();
+  }, [fetchCart, fetchOrders]);
 
   const tabs = [
     {

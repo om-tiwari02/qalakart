@@ -3,9 +3,9 @@ import { OrderStatus } from "./order.model.js";
 
 export const placeOrderSchema = z.object({
   body: z.object({
-    shippingAddress: z.string({
-      required_error: "Shipping address is required",
-    }).min(10, "Shipping address must be at least 10 characters"),
+    shippingAddress: z.string().min(10, "Shipping address is required and must be at least 10 characters"),
+    paymentMethod: z.enum(['online', 'cod']).optional(),
+    paymentStatus: z.enum(['pending', 'completed']).optional()
   }),
 });
 

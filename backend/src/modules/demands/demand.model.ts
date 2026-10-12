@@ -6,7 +6,10 @@ export interface IDemand extends Document {
   description: string;
   category?: string;
   quantity: number;
-  status: "open" | "fulfilled" | "closed";
+  status: "open" | "accepted" | "fulfilled" | "closed";
+  images: string[];
+  creatorId?: Types.ObjectId;
+  price?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,9 +23,12 @@ const demandSchema = new Schema<IDemand>(
     quantity: { type: Number, required: true, default: 1 },
     status: {
       type: String,
-      enum: ["open", "fulfilled", "closed"],
+      enum: ["open", "accepted", "fulfilled", "closed"],
       default: "open"
-    }
+    },
+    images: [{ type: String }],
+    creatorId: { type: Schema.Types.ObjectId, ref: "User" },
+    price: { type: Number, min: 0 }
   },
   { timestamps: true }
 );

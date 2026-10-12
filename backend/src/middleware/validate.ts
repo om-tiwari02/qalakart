@@ -3,24 +3,48 @@ import type { ZodError, ZodSchema } from "zod";
 
 type AnySchema = ZodSchema<any>;
 
-export function validate(opts: { body?: AnySchema; query?: AnySchema; params?: AnySchema }) {
+export function validate(schema: AnySchema | { body?: AnySchema; query?: AnySchema; params?: AnySchema }) {
   return (req: Request, _res: Response, next: NextFunction) => {
     try {
-      if (opts.body) {
-        req.body = opts.body.parse(req.body);
-      }
-      if (opts.query) {
-        const parsed = opts.query.parse(req.query);
-        Object.defineProperty(req, "query", {
-          value: parsed,
-          configurable: true,
-          enumerable: true
+      // Check if the schema is a ZodSchema (has .parse) with a shape containing body/params/query
+      if ("parse" in schema && typeof (schema as any).parse === "function") {
+        // It's a full Zod schema like z.object({ body: ..., params: ... })
+        const result = (schema as AnySchema).parse({
+          body: req.body,
+          params: req.params,
+          query: req.query
         });
-      }
-      if (opts.params) {
-        const parsed = opts.params.parse(req.params);
-        for (const key of Object.keys(req.params)) delete req.params[key];
-        Object.assign(req.params, parsed);
+        if (result.body) req.body = result.body;
+        if (result.query) {
+          Object.defineProperty(req, "query", {
+            value: result.query,
+            configurable: true,
+            enumerable: true
+          });
+        }
+        if (result.params) {
+          for (const key of Object.keys(req.params)) delete req.params[key];
+          Object.assign(req.params, result.params);
+        }
+      } else {
+        // Legacy format: { body?: ZodSchema, query?: ZodSchema, params?: ZodSchema }
+        const opts = schema as { body?: AnySchema; query?: AnySchema; params?: AnySchema };
+        if (opts.body) {
+          req.body = opts.body.parse(req.body);
+        }
+        if (opts.query) {
+          const parsed = opts.query.parse(req.query);
+          Object.defineProperty(req, "query", {
+            value: parsed,
+            configurable: true,
+            enumerable: true
+          });
+        }
+        if (opts.params) {
+          const parsed = opts.params.parse(req.params);
+          for (const key of Object.keys(req.params)) delete req.params[key];
+          Object.assign(req.params, parsed);
+        }
       }
       next();
     } catch (e: any) {
@@ -43,9 +67,7 @@ export function validate(opts: { body?: AnySchema; query?: AnySchema; params?: A
         err.fields = fields;
         throw err;
       }
-      // If it's not a ZodError (e.g. TypeError), throw it to be handled as a 500
       throw e;
     }
   };
 }
-

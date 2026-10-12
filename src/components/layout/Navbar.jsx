@@ -24,13 +24,13 @@ const Navbar = () => {
   const profileImageUrl = getProfileImageUrl(user?.profileImage);
 
   const handleProfileClick = () => {
-    const profilePath = role === 'creator' ? '/creator/dashboard' : '/profile';
+    const profilePath = '/profile';
     
     if (location.pathname === profilePath) {
-      // If already on profile/dashboard, click works as back button
+      // If already on profile, click works as back button
       navigate(-1);
     } else {
-      // Otherwise, open profile/dashboard
+      // Otherwise, open profile
       navigate(profilePath);
     }
   };
@@ -64,6 +64,14 @@ const Navbar = () => {
                     {totalKartCount}
                   </span>
                 )}
+              </div>
+            </Link>
+          )}
+
+          {role === 'creator' && (
+            <Link to="/creator/dashboard" className="relative p-2 text-slate-300 hover:text-accent2 transition-colors group">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Creator Dashboard</span>
               </div>
             </Link>
           )}

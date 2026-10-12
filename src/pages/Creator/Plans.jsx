@@ -70,6 +70,7 @@ const Plans = () => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [panNumber, setPanNumber] = useState('');
   const [isPaying, setIsPaying] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
 
   React.useEffect(() => {
     if (isSubscribed) {
@@ -93,6 +94,34 @@ const Plans = () => {
     setShowCheckout(false);
     toast.success('Payment successful! Creator Dashboard unlocked.');
     navigate('/creator/dashboard', { replace: true });
+  };
+
+  const handleSimulatedPayment = async () => {
+    if (!selectedPlan) return;
+    if (!validatePAN(panNumber)) {
+      toast.error('Please enter a valid PAN number.');
+      return;
+    }
+
+    setIsSimulating(true);
+    const toastId = toast.loading('Initiating secure payment simulation...');
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      toast.loading('Processing with Sandbox Bank...', { id: toastId });
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      toast.loading('Upgrading account on server...', { id: toastId });
+      await client.post('/payments/simulate-success');
+
+      toast.dismiss(toastId);
+      await handlePaymentSuccess();
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error(err.response?.data?.error?.message || err.message || 'Payment simulation failed');
+    } finally {
+      setIsSimulating(false);
+    }
   };
 
   const handleCheckout = async () => {
@@ -253,13 +282,23 @@ const Plans = () => {
                 <p className="text-xs text-slate-500">PAN is required for creator subscription activation.</p>
               </div>
 
-              <button
-                disabled={isPaying}
-                onClick={handleCheckout}
-                className="w-full btn-primary py-4 text-lg font-bold disabled:opacity-60"
-              >
-                {isPaying ? 'Opening Razorpay...' : `Pay ₹${selectedPlan.amount}`}
-              </button>
+              <div className="flex flex-col gap-3">
+                <button
+                  disabled={isPaying || isSimulating}
+                  onClick={handleCheckout}
+                  className="w-full btn-primary py-4 text-lg font-bold disabled:opacity-60"
+                >
+                  {isPaying ? 'Opening Razorpay...' : `Pay ₹${selectedPlan.amount}`}
+                </button>
+
+                <button
+                  disabled={isPaying || isSimulating}
+                  onClick={handleSimulatedPayment}
+                  className="w-full btn-outline py-4 text-lg font-bold disabled:opacity-60 border-dashed border-accent1/30 hover:border-accent1 text-accent1 hover:bg-accent1/5"
+                >
+                  {isSimulating ? 'Simulating Transaction...' : 'Simulate Payment (Sandbox)'}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

@@ -20,6 +20,7 @@ import { orderRouter } from "./modules/orders/order.routes.js";
 import { paymentRouter } from "./modules/payments/payment.routes.js";
 import { productRouter } from "./modules/products/product.routes.js";
 import { userRouter } from "./modules/users/user.routes.js";
+import { uploadRouter } from "./modules/upload/upload.routes.js";
 import { logger } from "./services/logger.js";
 
 export function createApp() {
@@ -84,7 +85,8 @@ export function createApp() {
         _req.path.startsWith("/v1/products") ||
         _req.path.startsWith("/v1/payments") ||
         _req.path.startsWith("/v1/ai") ||
-        _req.path.startsWith("/v1/users"))
+        _req.path.startsWith("/v1/users") ||
+        _req.path.startsWith("/v1/upload"))
     ) {
       return next();
     }
@@ -119,6 +121,7 @@ export function createApp() {
   app.use("/api/v1/payments", paymentRouter);
   app.use("/api/v1/demands", demandRouter);
   app.use("/api/v1/moments", momentRouter);
+  app.use("/api/v1/upload", uploadRouter);
 
   if (env.SENTRY_DSN) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

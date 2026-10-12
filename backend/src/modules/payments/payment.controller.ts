@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { createRazorpayOrder, getRazorpayConfig, verifyRazorpayPayment } from "./payment.service.js";
+import { upgradeUserToCreator } from "../auth/auth.service.js";
 
 export async function getPaymentConfigController(_req: Request, res: Response) {
   return res.status(200).json({ success: true, data: getRazorpayConfig() });
@@ -19,5 +20,16 @@ export async function verifyRazorpayPaymentController(req: Request, res: Respons
     });
   }
 
+  const userId = req.user!.sub;
+  await upgradeUserToCreator(userId);
+
   return res.status(200).json({ success: true, data: { verified: true } });
 }
+
+export async function simulatePaymentSuccessController(req: Request, res: Response) {
+  const userId = req.user!.sub;
+  await upgradeUserToCreator(userId);
+
+  return res.status(200).json({ success: true, data: { verified: true } });
+}
+
